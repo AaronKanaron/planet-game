@@ -3,48 +3,14 @@ use bevy::input::ButtonInput;
 use bevy::window::WindowPlugin;
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
+use crate::planet::mesh::VOXEL_SIZE;
 use crate::planet::plugin::PlanetPlugin;
+use crate::planet::startup::{VoxelType, VoxelWorld};
 
 mod planet;
 
-#[derive(Clone, Copy, PartialEq)]
-enum VoxelType {
-    Air,
-    Rock,
-    Dirt,
-}
 
-#[derive(Resource)]
-struct VoxelWorld {
-    width: usize,
-    height: usize,
-    voxels: Vec<VoxelType>,
-}
 
-impl VoxelWorld {
-    fn new(width: usize, height: usize) -> Self {
-        let voxels = vec![VoxelType::Air; width * height];
-        Self {
-            width,
-            height,
-            voxels,
-        }
-    }
-
-    fn get_voxel(&self, x: usize, y: usize) -> VoxelType {
-        if x < self.width && y < self.height{
-            self.voxels[y * self.width + x]
-        } else {
-            VoxelType::Air
-        }
-    }
-
-    fn set_voxel(&mut self, x: usize, y: usize, voxel_type: VoxelType) {
-        if x < self.width && y < self.height {
-            self.voxels[y * self.width + x] = voxel_type;
-        }
-    }    
-}
 
 fn main() {
     App::new()
@@ -67,7 +33,15 @@ fn main() {
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn((
+        Camera2d,
+        Camera {
+            clear_color: ClearColorConfig::Custom(Color::BLACK),
+            ..Default::default()
+        },
+        Transform::default(),
+        GlobalTransform::default()
+    ));
 }
 
 
@@ -98,35 +72,35 @@ fn handle_input(
     };
 
     if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-        let world_x = ((world_pos.x + 400.0) / 8.0) as isize;
-        let world_y = ((300.0 - world_pos.y) / 8.0) as isize;
+        let world_x = ((world_pos.x + 400.0) / VOXEL_SIZE) as isize;
+        let world_y = ((300.0 - world_pos.y) / VOXEL_SIZE) as isize;
 
         if world_x >= 0 && world_y >= 0 {
-            world.set_voxel(world_x as usize, world_y as usize, VoxelType::Air);
-            world.set_voxel((world_x + 1) as usize, (world_y) as usize, VoxelType::Air);
-            world.set_voxel(
-                (world_x + 1) as usize,
-                (world_y + 1) as usize,
-                VoxelType::Air,
-            );
-            world.set_voxel((world_x) as usize, (world_y + 1) as usize, VoxelType::Air);
-            world.set_voxel((world_x - 1) as usize, (world_y) as usize, VoxelType::Air);
-            world.set_voxel(
-                (world_x - 1) as usize,
-                (world_y - 1) as usize,
-                VoxelType::Air,
-            );
-            world.set_voxel((world_x) as usize, (world_y - 1) as usize, VoxelType::Air);
-            world.set_voxel(
-                (world_x + 1) as usize,
-                (world_y - 1) as usize,
-                VoxelType::Air,
-            );
-            world.set_voxel(
-                (world_x - 1) as usize,
-                (world_y + 1) as usize,
-                VoxelType::Air,
-            );
+            world.set_voxel(world_x as i32, world_y as i32, VoxelType::Air);
+            // world.set_voxel((world_x + 1) as i32, (world_y) as i32, VoxelType::Air);
+            // world.set_voxel(
+            //     (world_x + 1) as i32,
+            //     (world_y + 1) as i32,
+            //     VoxelType::Air,
+            // );
+            // world.set_voxel((world_x) as i32, (world_y + 1) as i32, VoxelType::Air);
+            // world.set_voxel((world_x - 1) as i32, (world_y) as i32, VoxelType::Air);
+            // world.set_voxel(
+            //     (world_x - 1) as i32,
+            //     (world_y - 1) as i32,
+            //     VoxelType::Air,
+            // );
+            // world.set_voxel((world_x) as i32, (world_y - 1) as i32, VoxelType::Air);
+            // world.set_voxel(
+            //     (world_x + 1) as i32,
+            //     (world_y - 1) as i32,
+            //     VoxelType::Air,
+            // );
+            // world.set_voxel(
+            //     (world_x - 1) as i32,
+            //     (world_y + 1) as i32,
+            //     VoxelType::Air,
+            // );
         }
     }
 }

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{planet::{mesh::render_mesh, startup::generate_terrain}, VoxelWorld};
+use crate::{planet::{mesh::render_mesh, startup::generate_chunk}, VoxelWorld};
 
 pub struct PlanetPlugin;
 
@@ -14,7 +14,15 @@ impl Plugin for PlanetPlugin {
 }
 
 fn setup(mut commands: Commands) {
-    let mut world = VoxelWorld::new(100, 100);
-    generate_terrain(&mut world);
+    let mut world = VoxelWorld::new(200, 200);  // Changed from 100x100 to 200x200
+    // PlanetGenerator::new(100.0, 42).generate_planet(&mut world);
+    // generate_terrain(&mut world);
+    for cx in 0..4 {
+        for cy in 0..2 {
+            let chunk = generate_chunk(cx as i32, cy as i32);
+            world.loaded_chunks.insert((cx as i32, cy as i32), chunk);
+        }
+    }
+    // generate_chunk(0, 0);
     commands.insert_resource(world);
 }
