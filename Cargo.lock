@@ -3383,6 +3383,7 @@ dependencies = [
  "bevy_picking",
  "nalgebra",
  "noise",
+ "once_cell",
  "rand 0.9.1",
 ]
 

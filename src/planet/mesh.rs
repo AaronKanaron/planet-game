@@ -58,7 +58,7 @@ pub fn render_mesh(
             commands.spawn((
                 Mesh2d(meshes.add(filled_mesh)),
                 MeshMaterial2d(materials.add(ColorMaterial::from(fill_color))),
-                Transform::default(), // Scale for visibility
+                Transform::default(),
                 Voxel,
             ));
 
@@ -111,32 +111,223 @@ fn generate_dual_contour_mesh(
 ) -> (Vec<[f32; 3]>, Vec<u32>) {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
+    let chunk_size = VoxelWorld::chunk_size() as i32;
 
-    // Process each 2x2 cell in the grid
-    //THIS RUNS EVERY FRAME ON EACH VOXEL
-    for y in 0..(world.height - 1) {
-        for x in 0..(world.width - 1) {
-            let cell = get_cell_configuration(world, x as i32, y as i32, target_type);
+    // Collect all chunk positions to determine the bounds
+    let chunk_positions: Vec<(i32, i32)> = world.get_loaded_chunks().map(|(&pos, _)| pos).collect();
+    
+    if chunk_positions.is_empty() {
+        return (vertices, indices);
+    }
 
-            if let Some(cell_mesh) = generate_cell_mesh(cell, x as f32, y as f32) {
-                let vertex_offset = vertices.len() as u32;
+    // Find the bounds of all loaded chunks
+    let min_chunk_x = chunk_positions.iter().map(|(x, _)| *x).min().unwrap();
+    let max_chunk_x = chunk_positions.iter().map(|(x, _)| *x).max().unwrap();
+    let min_chunk_y = chunk_positions.iter().map(|(_, y)| *y).min().unwrap();
+    let max_chunk_y = chunk_positions.iter().map(|(_, y)| *y).max().unwrap();
 
-                // Add vertices
-                for vertex in cell_mesh.vertices {
-                    vertices.push([vertex.x * VOXEL_SIZE - 400.0, 300.0 - vertex.y * VOXEL_SIZE, 0.0]);
-                }
+    // Calculate world bounds
+    let world_min_x = min_chunk_x * chunk_size;
+    let world_max_x = (max_chunk_x + 1) * chunk_size;
+    let world_min_y = min_chunk_y * chunk_size;
+    let world_max_y = (max_chunk_y + 1) * chunk_size;
 
-                // Add indices with offset
-                for triangle in cell_mesh.triangles {
-                    indices.push(vertex_offset + triangle[0]);
-                    indices.push(vertex_offset + triangle[1]);
-                    indices.push(vertex_offset + triangle[2]);
+    // First pass: Generate dual contour mesh data
+    let mut mesh_quads = Vec::new();
+    let mut complex_meshes = Vec::new();
+
+    for world_y in world_min_y..(world_max_y - 1) {
+        for world_x in world_min_x..(world_max_x - 1) {
+            // Only create cells where we can sample all 4 corners
+            if can_sample_cell(world, world_x, world_y) {
+                let cell = get_cell_configuration(world, world_x, world_y, target_type);
+
+                if let Some(cell_mesh) = generate_cell_mesh(cell, world_x as f32, world_y as f32) {
+                    // Check if this is a simple full quad that can be greedy meshed
+                    if is_full_quad_mesh(&cell_mesh, world_x as f32, world_y as f32) {
+                        mesh_quads.push((world_x, world_y));
+                    } else {
+                        // Complex shapes go directly into the final mesh
+                        complex_meshes.push(cell_mesh);
+                    }
                 }
             }
         }
     }
 
+    // Second pass: Apply greedy meshing to full quads
+    let greedy_quads = greedy_mesh_quads(&mesh_quads, world_min_x, world_min_y, world_max_x, world_max_y);
+
+    // Debug information
+    // println!("Greedy meshing: {} individual quads -> {} merged quads + {} complex meshes", 
+    //          mesh_quads.len(), greedy_quads.len(), complex_meshes.len());
+
+    // Add greedy meshed quads to the final mesh
+    for quad in greedy_quads {
+        add_quad_to_mesh(&mut vertices, &mut indices, quad);
+    }
+
+    // Add complex meshes to the final mesh
+    for cell_mesh in complex_meshes {
+        let vertex_offset = vertices.len() as u32;
+
+        // Add vertices
+        for vertex in cell_mesh.vertices {
+            vertices.push([vertex.x * VOXEL_SIZE - 400.0, 300.0 - vertex.y * VOXEL_SIZE, 0.0]);
+        }
+
+        // Add indices with offset
+        for triangle in cell_mesh.triangles {
+            indices.push(vertex_offset + triangle[0]);
+            indices.push(vertex_offset + triangle[1]);
+            indices.push(vertex_offset + triangle[2]);
+        }
+    }
+
     (vertices, indices)
+}
+
+// Helper function to check if we can sample all 4 corners of a cell
+fn can_sample_cell(world: &VoxelWorld, x: i32, y: i32) -> bool {
+    let chunk_size = VoxelWorld::chunk_size() as i32;
+    
+    // Check if all 4 corners of the cell have their chunks loaded
+    for dy in 0..=1 {
+        for dx in 0..=1 {
+            let voxel_x = x + dx;
+            let voxel_y = y + dy;
+            let chunk_x = voxel_x.div_euclid(chunk_size);
+            let chunk_y = voxel_y.div_euclid(chunk_size);
+            
+            if !world.is_chunk_loaded(chunk_x, chunk_y) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+// Check if a mesh represents a simple full quad
+fn is_full_quad_mesh(mesh: &CellMesh, x: f32, y: f32) -> bool {
+    // A full quad should have exactly 4 vertices and 2 triangles
+    if mesh.vertices.len() != 4 || mesh.triangles.len() != 2 {
+        return false;
+    }
+
+    // Check if vertices form a unit square
+    let expected_vertices = [
+        Vec2::new(x, y),
+        Vec2::new(x + 1.0, y),
+        Vec2::new(x + 1.0, y + 1.0),
+        Vec2::new(x, y + 1.0),
+    ];
+
+    // Vertices might be in different order, so check if all expected vertices exist
+    for expected in &expected_vertices {
+        if !mesh.vertices.iter().any(|v| (v.x - expected.x).abs() < 0.001 && (v.y - expected.y).abs() < 0.001) {
+            return false;
+        }
+    }
+
+    true
+}
+
+#[derive(Debug, Clone)]
+struct GreedyQuad {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+}
+
+// Greedy meshing algorithm for combining adjacent quads
+fn greedy_mesh_quads(quads: &[(i32, i32)], min_x: i32, min_y: i32, max_x: i32, max_y: i32) -> Vec<GreedyQuad> {
+    let mut result = Vec::new();
+    let width = (max_x - min_x) as usize;
+    let height = (max_y - min_y) as usize;
+    
+    // Create a grid to mark which quads have been processed
+    let mut processed = vec![vec![false; width]; height];
+    let mut quad_grid = vec![vec![false; width]; height];
+
+    // Mark existing quads in the grid
+    for &(qx, qy) in quads {
+        let gx = (qx - min_x) as usize;
+        let gy = (qy - min_y) as usize;
+        if gx < width && gy < height {
+            quad_grid[gy][gx] = true;
+        }
+    }
+
+    // Greedy meshing algorithm
+    for y in 0..height {
+        for x in 0..width {
+            if !processed[y][x] && quad_grid[y][x] {
+                // Start a new greedy quad
+                let mut quad_width = 1;
+                let mut quad_height = 1;
+
+                // Extend horizontally as much as possible
+                while x + quad_width < width 
+                    && !processed[y][x + quad_width] 
+                    && quad_grid[y][x + quad_width] {
+                    quad_width += 1;
+                }
+
+                // Try to extend vertically
+                'vertical_loop: while y + quad_height < height {
+                    // Check if the entire horizontal strip is available
+                    for dx in 0..quad_width {
+                        if processed[y + quad_height][x + dx] || !quad_grid[y + quad_height][x + dx] {
+                            break 'vertical_loop;
+                        }
+                    }
+                    quad_height += 1;
+                }
+
+                // Mark all quads in this rectangle as processed
+                for dy in 0..quad_height {
+                    for dx in 0..quad_width {
+                        processed[y + dy][x + dx] = true;
+                    }
+                }
+
+                // Add the greedy quad
+                result.push(GreedyQuad {
+                    x: min_x + x as i32,
+                    y: min_y + y as i32,
+                    width: quad_width as i32,
+                    height: quad_height as i32,
+                });
+            }
+        }
+    }
+
+    result
+}
+
+// Add a greedy quad to the mesh
+fn add_quad_to_mesh(vertices: &mut Vec<[f32; 3]>, indices: &mut Vec<u32>, quad: GreedyQuad) {
+    let vertex_offset = vertices.len() as u32;
+
+    // Add vertices for the rectangle
+    let x = quad.x as f32;
+    let y = quad.y as f32;
+    let w = quad.width as f32;
+    let h = quad.height as f32;
+
+    vertices.extend_from_slice(&[
+        [x * VOXEL_SIZE - 400.0, 300.0 - y * VOXEL_SIZE, 0.0],                     // bottom-left
+        [(x + w) * VOXEL_SIZE - 400.0, 300.0 - y * VOXEL_SIZE, 0.0],               // bottom-right
+        [(x + w) * VOXEL_SIZE - 400.0, 300.0 - (y + h) * VOXEL_SIZE, 0.0],         // top-right
+        [x * VOXEL_SIZE - 400.0, 300.0 - (y + h) * VOXEL_SIZE, 0.0],               // top-left
+    ]);
+
+    // Add indices for two triangles
+    indices.extend_from_slice(&[
+        vertex_offset + 0, vertex_offset + 1, vertex_offset + 2, // first triangle
+        vertex_offset + 0, vertex_offset + 2, vertex_offset + 3, // second triangle
+    ]);
 }
 
 #[derive(Debug)]

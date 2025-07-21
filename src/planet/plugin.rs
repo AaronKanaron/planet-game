@@ -17,8 +17,8 @@ fn setup(mut commands: Commands) {
     let mut world = VoxelWorld::new(200, 200);  // Changed from 100x100 to 200x200
     // PlanetGenerator::new(100.0, 42).generate_planet(&mut world);
     // generate_terrain(&mut world);
-    for cx in 0..4 {
-        for cy in 0..2 {
+    for cx in 0..8 {
+        for cy in 0..8 {
             let chunk = generate_chunk(cx as i32, cy as i32);
             world.loaded_chunks.insert((cx as i32, cy as i32), chunk);
         }

@@ -1,5 +1,6 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 use noise::{NoiseFn, Perlin};
+use once_cell::sync::Lazy;
 
 pub const CHUNK_SIZE: usize = 16; // Size of each chunk in voxels (n x n)
 
@@ -36,7 +37,7 @@ pub struct VoxelWorld {
 
 impl VoxelWorld {
     pub fn new(width: usize, height: usize) -> Self {
-        let voxels = vec![VoxelType::Air; width * height];
+        // let voxels = vec![VoxelType::Air; width * height];
         Self {
             width,
             height,
@@ -113,19 +114,24 @@ pub enum VoxelType {
     // Grass,
 }
 
+static PERLIN: Lazy<Perlin> = Lazy::new(|| Perlin::new(42));
+
 pub fn generate_chunk(cx: i32, cy: i32) -> Chunk {
     let mut voxels = Vec::with_capacity(CHUNK_SIZE * CHUNK_SIZE);
-    let perlin_noise = Perlin::new(42); // Example noise generator, adjust as needed
+    let scale = 50.0;
 
     for dx in 0..CHUNK_SIZE {
         for dy in 0..CHUNK_SIZE {
-            let world_x = cx * CHUNK_SIZE as i32 + dx as i32;
-            let world_y = cy * CHUNK_SIZE as i32 + dy as i32;
+            // Calculate world coordinates centered in the voxel
+            let world_x = (cx * CHUNK_SIZE as i32 + dx as i32) as f64 + 0.5;
+            let world_y = (cy * CHUNK_SIZE as i32 + dy as i32) as f64 + 0.5;
 
-            // Example terrain generation logic using Perlin noise
-            let noise_value = perlin_noise.get([world_x as f64 / 10.0, world_y as f64 / 10.0]);
+            let noise_value = PERLIN.get([world_x / scale, world_y / scale]);
+
             let voxel = if noise_value > 0.0 {
                 VoxelType::Rock
+            } else if noise_value > -0.5 {
+                VoxelType::Dirt
             } else {
                 VoxelType::Air
             };
@@ -135,64 +141,6 @@ pub fn generate_chunk(cx: i32, cy: i32) -> Chunk {
 
     Chunk {
         position: (cx, cy),
-        voxels: voxels,
+        voxels,
     }
 }
-
-// pub fn generate_terrain(world: &mut VoxelWorld) {
-//     let noise = Perlin::new(42);
-//     let detail_noise = Perlin::new(123);
-//     let cave_noise = Perlin::new(456);
-
-//     let center_x = world.width as f32 / 2.0;
-//     let center_y = world.height as f32 / 2.0;
-//     let base_radius = 80.0;
-
-//     for x in 0..world.width {
-//         for y in 0..world.height {
-//             let dx = x as f32 - center_x;
-//             let dy = y as f32 - center_y;
-//             let distance = (dx * dx + dy * dy).sqrt();
-
-//             // Create irregular planet shape using noise
-//             let shape_noise = noise.get([x as f64 / 15.0, y as f64 / 15.0]) * 8.0;
-//             let effective_radius = base_radius + shape_noise as f32;
-
-//             if distance < effective_radius {
-//                 // Height-based terrain layers
-//                 let height_factor = 1.0 - (distance / effective_radius);
-
-//                 // Add surface detail
-//                 let surface_noise = detail_noise.get([x as f64 / 5.0, y as f64 / 5.0]);
-//                 let cave_value = cave_noise.get([x as f64 / 8.0, y as f64 / 8.0]);
-
-//                 // Create caves/air pockets
-//                 if cave_value > 0.4 && height_factor < 0.8 {
-//                     continue; // Leave as air
-//                 }
-
-//                 // Core region (deep rock)
-//                 if height_factor > 0.7 {
-//                     world.set_voxel(x, y, VoxelType::Rock);
-//                 }
-//                 // Middle layer with mixed materials
-//                 else if height_factor > 0.4 {
-//                     if surface_noise > 0.2 {
-//                         world.set_voxel(x, y, VoxelType::Rock);
-//                     } else {
-//                         world.set_voxel(x, y, VoxelType::Dirt);
-//                     }
-//                 }
-//                 // Surface layer - mostly dirt with some rock outcrops
-//                 else {
-//                     if surface_noise > 0.5 {
-//                         world.set_voxel(x, y, VoxelType::Rock);
-//                     } else if surface_noise > -0.3 {
-//                         world.set_voxel(x, y, VoxelType::Dirt);
-//                     }
-//                     // Else remains air for surface variation
-//                 }
-//             }
-//         }
-//     }
-// }
