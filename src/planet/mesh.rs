@@ -1,6 +1,10 @@
-use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::{Indices, PrimitiveTopology}};
+use bevy::{
+    asset::RenderAssetUsages,
+    prelude::*,
+    render::mesh::{Indices, PrimitiveTopology},
+};
 
-use crate::{VoxelType, VoxelWorld};
+use crate::{VoxelType, VoxelWorld, planet::greedy_mesh::GreedyMeshHandler};
 
 // Voxel size in world units
 pub(crate) const VOXEL_SIZE: f32 = 8.0;
@@ -8,326 +12,569 @@ pub(crate) const VOXEL_SIZE: f32 = 8.0;
 #[derive(Component)]
 pub struct Voxel;
 
-pub fn render_mesh(
-    mut commands: Commands,
-    world: Res<VoxelWorld>,
-    existing_voxels: Query<Entity, With<Voxel>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
-    // Clean up existing entities
-    for entity in existing_voxels.iter() {
-        commands.entity(entity).despawn();
-    }
+pub struct MeshRenderer;
 
-    // Create separate meshes for different material types
-    for &material_type in &[VoxelType::Rock, VoxelType::Dirt] {
-        let (vertices, indices) = generate_dual_contour_mesh(&world, material_type);
+struct DualContourer;
 
-        if !vertices.is_empty() && !indices.is_empty() {
-            // Create filled mesh
-            let mut filled_mesh = Mesh::new(
-                PrimitiveTopology::TriangleList,
-                RenderAssetUsages::RENDER_WORLD,
-            );
+impl MeshRenderer {
+    pub fn render_mesh(
+        mut commands: Commands,
+        world: Res<VoxelWorld>,
+        existing_voxels: Query<Entity, With<Voxel>>,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut materials: ResMut<Assets<ColorMaterial>>,
+    ) {
+        // Clean up existing entities
+        for entity in existing_voxels.iter() {
+            commands.entity(entity).despawn();
+        }
 
-            filled_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices.clone());
+        // Create separate meshes for different material types
+        for &material_type in &[VoxelType::Rock, VoxelType::Dirt] {
+            let (vertices, indices) =
+                DualContourer::generate_dual_contour_mesh(&world, material_type);
 
-            // Generate normals (all facing forward for 2D)
-            let normals: Vec<[f32; 3]> = (0..vertices.len()).map(|_| [0.0, 0.0, 1.0]).collect();
-            filled_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
-
-            filled_mesh.insert_indices(Indices::U32(indices.clone()));
-
-            let fill_color = match material_type {
-                VoxelType::Air => Color::srgba(0.0, 0.0, 0.0, 0.0), // Transparent
-                VoxelType::Rock => Color::srgb(0.4, 0.4, 0.4),      // Gray
-                VoxelType::Dirt => Color::srgb(0.6, 0.4, 0.2),      // Brown
-                                                                     // VoxelType::Sand => Color::srgb(0.9, 0.8, 0.5),      // Sandy yellow
-                                                                     // VoxelType::Water => Color::srgb(0.2, 0.4, 0.8),     // Blue
-                                                                     // VoxelType::Ice => Color::srgb(0.8, 0.9, 1.0),       // Light blue-white
-                                                                     // VoxelType::Lava => Color::srgb(1.0, 0.3, 0.0),      // Bright orange-red
-                                                                     // VoxelType::DeepRock => Color::srgb(0.2, 0.2, 0.3),  // Dark gray-blue
-                                                                     // VoxelType::Ore => Color::srgb(0.6, 0.5, 0.2),       // Metallic bronze
-                                                                     // VoxelType::Crystal => Color::srgb(0.8, 0.2, 0.9),   // Bright purple
-                                                                     // VoxelType::Obsidian => Color::srgb(0.1, 0.1, 0.1),  // Very dark gray/black
-                                                                     // VoxelType::Grass => Color::srgb(0.3, 0.7, 0.2),     // Green
-            };
-
-            // Spawn filled mesh
-            commands.spawn((
-                Mesh2d(meshes.add(filled_mesh)),
-                MeshMaterial2d(materials.add(ColorMaterial::from(fill_color))),
-                Transform::default(),
-                Voxel,
-            ));
-
-            // Create wireframe mesh
-            let wireframe_indices = generate_wireframe_indices(&indices);
-
-            if !wireframe_indices.is_empty() {
-                let mut wireframe_mesh = Mesh::new(
-                    PrimitiveTopology::LineList,
+            if !vertices.is_empty() && !indices.is_empty() {
+                // Create filled mesh
+                let mut filled_mesh = Mesh::new(
+                    PrimitiveTopology::TriangleList,
                     RenderAssetUsages::RENDER_WORLD,
                 );
 
-                wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-                wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-                wireframe_mesh.insert_indices(Indices::U32(wireframe_indices));
+                filled_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices.clone());
 
-                // Spawn wireframe mesh
+                // Generate normals (all facing forward for 2D)
+                let normals: Vec<[f32; 3]> = (0..vertices.len()).map(|_| [0.0, 0.0, 1.0]).collect();
+                filled_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
+
+                filled_mesh.insert_indices(Indices::U32(indices.clone()));
+
+                let fill_color = match material_type {
+                    VoxelType::Air => Color::srgba(0.0, 0.0, 0.0, 0.0), // Transparent
+                    VoxelType::Rock => Color::srgb(0.4, 0.4, 0.4),      // Gray
+                    VoxelType::Dirt => Color::srgb(0.6, 0.4, 0.2),      // Brown
+                                                                         // VoxelType::Sand => Color::srgb(0.9, 0.8, 0.5),      // Sandy yellow
+                                                                         // VoxelType::Water => Color::srgb(0.2, 0.4, 0.8),     // Blue
+                                                                         // VoxelType::Ice => Color::srgb(0.8, 0.9, 1.0),       // Light blue-white
+                                                                         // VoxelType::Lava => Color::srgb(1.0, 0.3, 0.0),      // Bright orange-red
+                                                                         // VoxelType::DeepRock => Color::srgb(0.2, 0.2, 0.3),  // Dark gray-blue
+                                                                         // VoxelType::Ore => Color::srgb(0.6, 0.5, 0.2),       // Metallic bronze
+                                                                         // VoxelType::Crystal => Color::srgb(0.8, 0.2, 0.9),   // Bright purple
+                                                                         // VoxelType::Obsidian => Color::srgb(0.1, 0.1, 0.1),  // Very dark gray/black
+                                                                         // VoxelType::Grass => Color::srgb(0.3, 0.7, 0.2),     // Green
+                };
+
+                // Spawn filled mesh
                 commands.spawn((
-                    Mesh2d(meshes.add(wireframe_mesh)),
-                    MeshMaterial2d(materials.add(ColorMaterial::from(Color::srgb(1.0, 1.0, 1.0)))),
-                    Transform::from_xyz(0.0, 0.0, 0.1), // Slightly in front
+                    Mesh2d(meshes.add(filled_mesh)),
+                    MeshMaterial2d(materials.add(ColorMaterial::from(fill_color))),
+                    Transform::default(),
                     Voxel,
                 ));
-            }
-        }
-    }
-}
 
-fn generate_wireframe_indices(triangle_indices: &[u32]) -> Vec<u32> {
-    let mut wireframe_indices = Vec::new();
+                // Create wireframe mesh
+                let wireframe_indices = Self::generate_wireframe_indices(&indices);
 
-    // Convert each triangle to 3 lines
-    for triangle in triangle_indices.chunks(3) {
-        if triangle.len() == 3 {
-            let a = triangle[0];
-            let b = triangle[1];
-            let c = triangle[2];
+                if !wireframe_indices.is_empty() {
+                    let mut wireframe_mesh =
+                        Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::RENDER_WORLD);
 
-            // Add three lines: a-b, b-c, c-a
-            wireframe_indices.extend_from_slice(&[a, b, b, c, c, a]);
-        }
-    }
+                    wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
+                    wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+                    wireframe_mesh.insert_indices(Indices::U32(wireframe_indices));
 
-    wireframe_indices
-}
-
-fn generate_dual_contour_mesh(
-    world: &VoxelWorld,
-    target_type: VoxelType,
-) -> (Vec<[f32; 3]>, Vec<u32>) {
-    let mut vertices = Vec::new();
-    let mut indices = Vec::new();
-    let chunk_size = VoxelWorld::chunk_size() as i32;
-
-    // Collect all chunk positions to determine the bounds
-    let chunk_positions: Vec<(i32, i32)> = world.get_loaded_chunks().map(|(&pos, _)| pos).collect();
-    
-    if chunk_positions.is_empty() {
-        return (vertices, indices);
-    }
-
-    // Find the bounds of all loaded chunks
-    let min_chunk_x = chunk_positions.iter().map(|(x, _)| *x).min().unwrap();
-    let max_chunk_x = chunk_positions.iter().map(|(x, _)| *x).max().unwrap();
-    let min_chunk_y = chunk_positions.iter().map(|(_, y)| *y).min().unwrap();
-    let max_chunk_y = chunk_positions.iter().map(|(_, y)| *y).max().unwrap();
-
-    // Calculate world bounds
-    let world_min_x = min_chunk_x * chunk_size;
-    let world_max_x = (max_chunk_x + 1) * chunk_size;
-    let world_min_y = min_chunk_y * chunk_size;
-    let world_max_y = (max_chunk_y + 1) * chunk_size;
-
-    // First pass: Generate dual contour mesh data
-    let mut mesh_quads = Vec::new();
-    let mut complex_meshes = Vec::new();
-
-    for world_y in world_min_y..(world_max_y - 1) {
-        for world_x in world_min_x..(world_max_x - 1) {
-            // Only create cells where we can sample all 4 corners
-            if can_sample_cell(world, world_x, world_y) {
-                let cell = get_cell_configuration(world, world_x, world_y, target_type);
-
-                if let Some(cell_mesh) = generate_cell_mesh(cell, world_x as f32, world_y as f32) {
-                    // Check if this is a simple full quad that can be greedy meshed
-                    if is_full_quad_mesh(&cell_mesh, world_x as f32, world_y as f32) {
-                        mesh_quads.push((world_x, world_y));
-                    } else {
-                        // Complex shapes go directly into the final mesh
-                        complex_meshes.push(cell_mesh);
-                    }
+                    // Spawn wireframe mesh
+                    commands.spawn((
+                        Mesh2d(meshes.add(wireframe_mesh)),
+                        MeshMaterial2d(
+                            materials.add(ColorMaterial::from(Color::srgb(1.0, 1.0, 1.0))),
+                        ),
+                        Transform::from_xyz(0.0, 0.0, 0.1), // Slightly in front
+                        Voxel,
+                    ));
                 }
             }
         }
     }
 
-    // Second pass: Apply greedy meshing to full quads
-    let greedy_quads = greedy_mesh_quads(&mesh_quads, world_min_x, world_min_y, world_max_x, world_max_y);
+    fn generate_wireframe_indices(triangle_indices: &[u32]) -> Vec<u32> {
+        let mut wireframe_indices = Vec::new();
 
-    // Debug information
-    // println!("Greedy meshing: {} individual quads -> {} merged quads + {} complex meshes", 
-    //          mesh_quads.len(), greedy_quads.len(), complex_meshes.len());
+        // Convert each triangle to 3 lines
+        for triangle in triangle_indices.chunks(3) {
+            if triangle.len() == 3 {
+                let a = triangle[0];
+                let b = triangle[1];
+                let c = triangle[2];
 
-    // Add greedy meshed quads to the final mesh
-    for quad in greedy_quads {
-        add_quad_to_mesh(&mut vertices, &mut indices, quad);
-    }
-
-    // Add complex meshes to the final mesh
-    for cell_mesh in complex_meshes {
-        let vertex_offset = vertices.len() as u32;
-
-        // Add vertices
-        for vertex in cell_mesh.vertices {
-            vertices.push([vertex.x * VOXEL_SIZE - 400.0, 300.0 - vertex.y * VOXEL_SIZE, 0.0]);
-        }
-
-        // Add indices with offset
-        for triangle in cell_mesh.triangles {
-            indices.push(vertex_offset + triangle[0]);
-            indices.push(vertex_offset + triangle[1]);
-            indices.push(vertex_offset + triangle[2]);
-        }
-    }
-
-    (vertices, indices)
-}
-
-// Helper function to check if we can sample all 4 corners of a cell
-fn can_sample_cell(world: &VoxelWorld, x: i32, y: i32) -> bool {
-    let chunk_size = VoxelWorld::chunk_size() as i32;
-    
-    // Check if all 4 corners of the cell have their chunks loaded
-    for dy in 0..=1 {
-        for dx in 0..=1 {
-            let voxel_x = x + dx;
-            let voxel_y = y + dy;
-            let chunk_x = voxel_x.div_euclid(chunk_size);
-            let chunk_y = voxel_y.div_euclid(chunk_size);
-            
-            if !world.is_chunk_loaded(chunk_x, chunk_y) {
-                return false;
+                // Add three lines: a-b, b-c, c-a
+                wireframe_indices.extend_from_slice(&[a, b, b, c, c, a]);
             }
         }
+
+        wireframe_indices
     }
-    true
 }
 
-// Check if a mesh represents a simple full quad
-fn is_full_quad_mesh(mesh: &CellMesh, x: f32, y: f32) -> bool {
-    // A full quad should have exactly 4 vertices and 2 triangles
-    if mesh.vertices.len() != 4 || mesh.triangles.len() != 2 {
-        return false;
-    }
+impl DualContourer {
+    fn generate_dual_contour_mesh(
+        world: &VoxelWorld,
+        target_type: VoxelType,
+    ) -> (Vec<[f32; 3]>, Vec<u32>) {
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        let chunk_size = VoxelWorld::chunk_size() as i32;
 
-    // Check if vertices form a unit square
-    let expected_vertices = [
-        Vec2::new(x, y),
-        Vec2::new(x + 1.0, y),
-        Vec2::new(x + 1.0, y + 1.0),
-        Vec2::new(x, y + 1.0),
-    ];
+        // Collect all chunk positions to determine the bounds
+        let chunk_positions: Vec<(i32, i32)> =
+            world.get_loaded_chunks().map(|(&pos, _)| pos).collect();
 
-    // Vertices might be in different order, so check if all expected vertices exist
-    for expected in &expected_vertices {
-        if !mesh.vertices.iter().any(|v| (v.x - expected.x).abs() < 0.001 && (v.y - expected.y).abs() < 0.001) {
-            return false;
+        if chunk_positions.is_empty() {
+            return (vertices, indices);
         }
-    }
 
-    true
-}
+        // Find the bounds of all loaded chunks
+        let min_chunk_x = chunk_positions.iter().map(|(x, _)| *x).min().unwrap();
+        let max_chunk_x = chunk_positions.iter().map(|(x, _)| *x).max().unwrap();
+        let min_chunk_y = chunk_positions.iter().map(|(_, y)| *y).min().unwrap();
+        let max_chunk_y = chunk_positions.iter().map(|(_, y)| *y).max().unwrap();
 
-#[derive(Debug, Clone)]
-struct GreedyQuad {
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-}
+        // Calculate world bounds
+        let world_min_x = min_chunk_x * chunk_size;
+        let world_max_x = (max_chunk_x + 1) * chunk_size;
+        let world_min_y = min_chunk_y * chunk_size;
+        let world_max_y = (max_chunk_y + 1) * chunk_size;
 
-// Greedy meshing algorithm for combining adjacent quads
-fn greedy_mesh_quads(quads: &[(i32, i32)], min_x: i32, min_y: i32, max_x: i32, max_y: i32) -> Vec<GreedyQuad> {
-    let mut result = Vec::new();
-    let width = (max_x - min_x) as usize;
-    let height = (max_y - min_y) as usize;
-    
-    // Create a grid to mark which quads have been processed
-    let mut processed = vec![vec![false; width]; height];
-    let mut quad_grid = vec![vec![false; width]; height];
+        // First pass: Generate dual contour mesh data
+        let mut mesh_quads = Vec::new();
+        let mut complex_meshes = Vec::new();
 
-    // Mark existing quads in the grid
-    for &(qx, qy) in quads {
-        let gx = (qx - min_x) as usize;
-        let gy = (qy - min_y) as usize;
-        if gx < width && gy < height {
-            quad_grid[gy][gx] = true;
-        }
-    }
+        for world_y in world_min_y..(world_max_y - 1) {
+            for world_x in world_min_x..(world_max_x - 1) {
+                // Only create cells where we can sample all 4 corners
+                if Self::can_sample_cell(world, world_x, world_y) {
+                    let cell = Self::get_cell_configuration(world, world_x, world_y, target_type);
 
-    // Greedy meshing algorithm
-    for y in 0..height {
-        for x in 0..width {
-            if !processed[y][x] && quad_grid[y][x] {
-                // Start a new greedy quad
-                let mut quad_width = 1;
-                let mut quad_height = 1;
-
-                // Extend horizontally as much as possible
-                while x + quad_width < width 
-                    && !processed[y][x + quad_width] 
-                    && quad_grid[y][x + quad_width] {
-                    quad_width += 1;
-                }
-
-                // Try to extend vertically
-                'vertical_loop: while y + quad_height < height {
-                    // Check if the entire horizontal strip is available
-                    for dx in 0..quad_width {
-                        if processed[y + quad_height][x + dx] || !quad_grid[y + quad_height][x + dx] {
-                            break 'vertical_loop;
+                    if let Some(cell_mesh) =
+                        Self::generate_cell_mesh(cell, world_x as f32, world_y as f32)
+                    {
+                        // Check if this is a simple full quad that can be greedy meshed
+                        if GreedyMeshHandler::is_full_quad_mesh(
+                            &cell_mesh,
+                            world_x as f32,
+                            world_y as f32,
+                        ) {
+                            mesh_quads.push((world_x, world_y));
+                        } else {
+                            // Complex shapes go directly into the final mesh
+                            complex_meshes.push(cell_mesh);
                         }
                     }
-                    quad_height += 1;
                 }
+            }
+        }
 
-                // Mark all quads in this rectangle as processed
-                for dy in 0..quad_height {
-                    for dx in 0..quad_width {
-                        processed[y + dy][x + dx] = true;
-                    }
-                }
+        // Second pass: Apply greedy meshing to full quads
+        let greedy_quads = GreedyMeshHandler::greedy_mesh_quads(
+            &mesh_quads,
+            world_min_x,
+            world_min_y,
+            world_max_x,
+            world_max_y,
+        );
 
-                // Add the greedy quad
-                result.push(GreedyQuad {
-                    x: min_x + x as i32,
-                    y: min_y + y as i32,
-                    width: quad_width as i32,
-                    height: quad_height as i32,
-                });
+        // Debug information
+        // println!("Greedy meshing: {} individual quads -> {} merged quads + {} complex meshes",
+        //          mesh_quads.len(), greedy_quads.len(), complex_meshes.len());
+
+        // Add greedy meshed quads to the final mesh
+        for quad in greedy_quads {
+            GreedyMeshHandler::add_quad_to_mesh(&mut vertices, &mut indices, quad);
+        }
+
+        // Add complex meshes to the final mesh
+        for cell_mesh in complex_meshes {
+            let vertex_offset = vertices.len() as u32;
+
+            // Add vertices
+            for vertex in cell_mesh.vertices {
+                vertices.push([
+                    vertex.x * VOXEL_SIZE - 400.0,
+                    300.0 - vertex.y * VOXEL_SIZE,
+                    0.0,
+                ]);
+            }
+
+            // Add indices with offset
+            for triangle in cell_mesh.triangles {
+                indices.push(vertex_offset + triangle[0]);
+                indices.push(vertex_offset + triangle[1]);
+                indices.push(vertex_offset + triangle[2]);
+            }
+        }
+
+        (vertices, indices)
+    }
+
+    fn get_cell_configuration(
+        world: &VoxelWorld,
+        x: i32,
+        y: i32,
+        target_type: VoxelType,
+    ) -> CellConfiguration {
+        CellConfiguration {
+            corners: [
+                world.get_voxel(x, y) == target_type,         // bottom-left
+                world.get_voxel(x + 1, y) == target_type,     // bottom-right
+                world.get_voxel(x + 1, y + 1) == target_type, // top-right
+                world.get_voxel(x, y + 1) == target_type,     // top-left
+            ],
+        }
+    }
+
+    fn create_full_quad(cell_x: f32, cell_y: f32) -> CellMesh {
+        let base_x = cell_x;
+        let base_y = cell_y;
+
+        CellMesh {
+            vertices: vec![
+                Vec2::new(base_x, base_y),
+                Vec2::new(base_x + 1.0, base_y),
+                Vec2::new(base_x + 1.0, base_y + 1.0),
+                Vec2::new(base_x, base_y + 1.0),
+            ],
+            triangles: vec![[0, 1, 2], [0, 2, 3]],
+        }
+    }
+
+    fn create_corner_mesh(cell_x: f32, cell_y: f32, corner: usize) -> CellMesh {
+        let base_x = cell_x;
+        let base_y = cell_y;
+
+        match corner {
+            0 => CellMesh {
+                // bottom-left
+                vertices: vec![
+                    Vec2::new(base_x, base_y),
+                    Vec2::new(base_x + 0.5, base_y),
+                    Vec2::new(base_x, base_y + 0.5),
+                ],
+                triangles: vec![[0, 1, 2]],
+            },
+            1 => CellMesh {
+                // bottom-right
+                vertices: vec![
+                    Vec2::new(base_x + 1.0, base_y),
+                    Vec2::new(base_x + 0.5, base_y),
+                    Vec2::new(base_x + 1.0, base_y + 0.5),
+                ],
+                triangles: vec![[0, 1, 2]],
+            },
+            2 => CellMesh {
+                // top-right
+                vertices: vec![
+                    Vec2::new(base_x + 1.0, base_y + 1.0),
+                    Vec2::new(base_x + 1.0, base_y + 0.5),
+                    Vec2::new(base_x + 0.5, base_y + 1.0),
+                ],
+                triangles: vec![[0, 1, 2]],
+            },
+            3 => CellMesh {
+                // top-left
+                vertices: vec![
+                    Vec2::new(base_x, base_y + 1.0),
+                    Vec2::new(base_x, base_y + 0.5),
+                    Vec2::new(base_x + 0.5, base_y + 1.0),
+                ],
+                triangles: vec![[0, 1, 2]],
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    fn create_inverse_corner_mesh(cell_x: f32, cell_y: f32, corner: usize) -> CellMesh {
+        let base_x = cell_x;
+        let base_y = cell_y;
+
+        // Create full square minus the corner
+        match corner {
+            0 => CellMesh {
+                // all except bottom-left
+                vertices: vec![
+                    Vec2::new(base_x + 0.5, base_y),
+                    Vec2::new(base_x + 1.0, base_y),
+                    Vec2::new(base_x + 1.0, base_y + 1.0),
+                    Vec2::new(base_x, base_y + 1.0),
+                    Vec2::new(base_x, base_y + 0.5),
+                ],
+                triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
+            },
+            1 => CellMesh {
+                // all except bottom-right (case 13)
+                vertices: vec![
+                    Vec2::new(base_x, base_y),
+                    Vec2::new(base_x + 0.5, base_y),
+                    Vec2::new(base_x + 1.0, base_y + 0.5),
+                    Vec2::new(base_x + 1.0, base_y + 1.0),
+                    Vec2::new(base_x, base_y + 1.0),
+                ],
+                triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
+            },
+            2 => CellMesh {
+                // all except top-right (case 11)
+                vertices: vec![
+                    Vec2::new(base_x, base_y),
+                    Vec2::new(base_x + 1.0, base_y),
+                    Vec2::new(base_x + 1.0, base_y + 0.5),
+                    Vec2::new(base_x + 0.5, base_y + 1.0),
+                    Vec2::new(base_x, base_y + 1.0),
+                ],
+                triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
+            },
+            3 => CellMesh {
+                // all except top-left (case 7)
+                vertices: vec![
+                    Vec2::new(base_x, base_y),
+                    Vec2::new(base_x + 1.0, base_y),
+                    Vec2::new(base_x + 1.0, base_y + 1.0),
+                    Vec2::new(base_x + 0.5, base_y + 1.0),
+                    Vec2::new(base_x, base_y + 0.5),
+                ],
+                triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    fn create_edge_mesh(cell_x: f32, cell_y: f32, edge: usize) -> CellMesh {
+        let base_x = cell_x;
+        let base_y = cell_y;
+
+        match edge {
+            0 => CellMesh {
+                // bottom edge
+                vertices: vec![
+                    Vec2::new(base_x, base_y),
+                    Vec2::new(base_x + 1.0, base_y),
+                    Vec2::new(base_x + 1.0, base_y + 0.5),
+                    Vec2::new(base_x, base_y + 0.5),
+                ],
+                triangles: vec![[0, 1, 2], [0, 2, 3]],
+            },
+            1 => CellMesh {
+                // right edge
+                vertices: vec![
+                    Vec2::new(base_x + 0.5, base_y),
+                    Vec2::new(base_x + 1.0, base_y),
+                    Vec2::new(base_x + 1.0, base_y + 1.0),
+                    Vec2::new(base_x + 0.5, base_y + 1.0),
+                ],
+                triangles: vec![[0, 1, 2], [0, 2, 3]],
+            },
+            2 => CellMesh {
+                // top edge
+                vertices: vec![
+                    Vec2::new(base_x, base_y + 0.5),
+                    Vec2::new(base_x + 1.0, base_y + 0.5),
+                    Vec2::new(base_x + 1.0, base_y + 1.0),
+                    Vec2::new(base_x, base_y + 1.0),
+                ],
+                triangles: vec![[0, 1, 2], [0, 2, 3]],
+            },
+            3 => CellMesh {
+                // left edge
+                vertices: vec![
+                    Vec2::new(base_x, base_y),
+                    Vec2::new(base_x + 0.5, base_y),
+                    Vec2::new(base_x + 0.5, base_y + 1.0),
+                    Vec2::new(base_x, base_y + 1.0),
+                ],
+                triangles: vec![[0, 1, 2], [0, 2, 3]],
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    fn create_diagonal_mesh(cell_x: f32, cell_y: f32, flip: bool) -> CellMesh {
+        let base_x = cell_x;
+        let base_y = cell_y;
+
+        if flip {
+            // bottom-right + top-left
+            CellMesh {
+                vertices: vec![
+                    Vec2::new(base_x + 0.5, base_y),       // bottom center
+                    Vec2::new(base_x + 1.0, base_y),       // bottom-right
+                    Vec2::new(base_x + 1.0, base_y + 0.5), // right center
+                    Vec2::new(base_x, base_y + 0.5),       // left center
+                    Vec2::new(base_x, base_y + 1.0),       // top-left
+                    Vec2::new(base_x + 0.5, base_y + 1.0), // top center
+                ],
+                triangles: vec![
+                    [0, 1, 2], // bottom-right triangle
+                    [3, 4, 5], // top-left triangle
+                ],
+            }
+        } else {
+            // bottom-left + top-right
+            CellMesh {
+                vertices: vec![
+                    Vec2::new(base_x, base_y),             // bottom-left
+                    Vec2::new(base_x + 0.5, base_y),       // bottom center
+                    Vec2::new(base_x, base_y + 0.5),       // left center
+                    Vec2::new(base_x + 0.5, base_y + 1.0), // top center
+                    Vec2::new(base_x + 1.0, base_y + 1.0), // top-right
+                    Vec2::new(base_x + 1.0, base_y + 0.5), // right center
+                ],
+                triangles: vec![
+                    [0, 1, 2], // bottom-left triangle
+                    [3, 4, 5], // top-right triangle
+                ],
             }
         }
     }
 
-    result
-}
+    fn create_generic_mesh(cell_x: f32, cell_y: f32, corners: [bool; 4]) -> CellMesh {
+        let mut vertices = Vec::new();
+        let mut triangles = Vec::new();
 
-// Add a greedy quad to the mesh
-fn add_quad_to_mesh(vertices: &mut Vec<[f32; 3]>, indices: &mut Vec<u32>, quad: GreedyQuad) {
-    let vertex_offset = vertices.len() as u32;
+        // Count filled corners
+        let filled_count = corners.iter().filter(|&&c| c).count();
 
-    // Add vertices for the rectangle
-    let x = quad.x as f32;
-    let y = quad.y as f32;
-    let w = quad.width as f32;
-    let h = quad.height as f32;
+        if filled_count == 0 {
+            // No mesh needed
+            return CellMesh {
+                vertices,
+                triangles,
+            };
+        }
 
-    vertices.extend_from_slice(&[
-        [x * VOXEL_SIZE - 400.0, 300.0 - y * VOXEL_SIZE, 0.0],                     // bottom-left
-        [(x + w) * VOXEL_SIZE - 400.0, 300.0 - y * VOXEL_SIZE, 0.0],               // bottom-right
-        [(x + w) * VOXEL_SIZE - 400.0, 300.0 - (y + h) * VOXEL_SIZE, 0.0],         // top-right
-        [x * VOXEL_SIZE - 400.0, 300.0 - (y + h) * VOXEL_SIZE, 0.0],               // top-left
-    ]);
+        if filled_count == 4 {
+            // All filled - create full quad
+            let base_x = cell_x;
+            let base_y = cell_y;
+            vertices = vec![
+                Vec2::new(base_x, base_y),
+                Vec2::new(base_x + 1.0, base_y),
+                Vec2::new(base_x + 1.0, base_y + 1.0),
+                Vec2::new(base_x, base_y + 1.0),
+            ];
+            triangles = vec![[0, 1, 2], [0, 2, 3]];
+        } else {
+            // For partial fills, create a more conservative mesh
+            // This is a fallback that tries to avoid sharp edges
+            let base_x = cell_x;
+            let base_y = cell_y;
+            let center_x = base_x + 0.5;
+            let center_y = base_y + 0.5;
 
-    // Add indices for two triangles
-    indices.extend_from_slice(&[
-        vertex_offset + 0, vertex_offset + 1, vertex_offset + 2, // first triangle
-        vertex_offset + 0, vertex_offset + 2, vertex_offset + 3, // second triangle
-    ]);
+            // Create triangular segments for each filled corner
+            if corners[0] {
+                // bottom-left
+                vertices.extend_from_slice(&[
+                    Vec2::new(base_x, base_y),
+                    Vec2::new(center_x, base_y),
+                    Vec2::new(base_x, center_y),
+                ]);
+                let base_idx = vertices.len() as u32 - 3;
+                triangles.push([base_idx, base_idx + 1, base_idx + 2]);
+            }
+            if corners[1] {
+                // bottom-right
+                vertices.extend_from_slice(&[
+                    Vec2::new(base_x + 1.0, base_y),
+                    Vec2::new(center_x, base_y),
+                    Vec2::new(base_x + 1.0, center_y),
+                ]);
+                let base_idx = vertices.len() as u32 - 3;
+                triangles.push([base_idx, base_idx + 2, base_idx + 1]);
+            }
+            if corners[2] {
+                // top-right
+                vertices.extend_from_slice(&[
+                    Vec2::new(base_x + 1.0, base_y + 1.0),
+                    Vec2::new(base_x + 1.0, center_y),
+                    Vec2::new(center_x, base_y + 1.0),
+                ]);
+                let base_idx = vertices.len() as u32 - 3;
+                triangles.push([base_idx, base_idx + 1, base_idx + 2]);
+            }
+            if corners[3] {
+                // top-left
+                vertices.extend_from_slice(&[
+                    Vec2::new(base_x, base_y + 1.0),
+                    Vec2::new(base_x, center_y),
+                    Vec2::new(center_x, base_y + 1.0),
+                ]);
+                let base_idx = vertices.len() as u32 - 3;
+                triangles.push([base_idx, base_idx + 2, base_idx + 1]);
+            }
+        }
+
+        CellMesh {
+            vertices,
+            triangles,
+        }
+    }
+
+    fn generate_cell_mesh(config: CellConfiguration, cell_x: f32, cell_y: f32) -> Option<CellMesh> {
+        let corners = config.corners;
+        let case_index = (corners[0] as u8)
+            | ((corners[1] as u8) << 1)
+            | ((corners[2] as u8) << 2)
+            | ((corners[3] as u8) << 3);
+
+        match case_index {
+            0 => None,                                          // All empty
+            15 => Some(Self::create_full_quad(cell_x, cell_y)), // All filled
+
+            // Single corner cases
+            1 => Some(Self::create_corner_mesh(cell_x, cell_y, 0)), // bottom-left
+            2 => Some(Self::create_corner_mesh(cell_x, cell_y, 1)), // bottom-right
+            4 => Some(Self::create_corner_mesh(cell_x, cell_y, 2)), // top-right
+            8 => Some(Self::create_corner_mesh(cell_x, cell_y, 3)), // top-left
+
+            // Adjacent corner cases (edges)
+            3 => Some(Self::create_edge_mesh(cell_x, cell_y, 0)), // bottom edge (corners 0,1)
+            6 => Some(Self::create_edge_mesh(cell_x, cell_y, 1)), // right edge (corners 1,2)
+            12 => Some(Self::create_edge_mesh(cell_x, cell_y, 2)), // top edge (corners 2,3)
+            9 => Some(Self::create_edge_mesh(cell_x, cell_y, 3)), // left edge (corners 3,0)
+
+            // Diagonal cases
+            5 => Some(Self::create_diagonal_mesh(cell_x, cell_y, false)), // bottom-left + top-right
+            10 => Some(Self::create_diagonal_mesh(cell_x, cell_y, true)), // bottom-right + top-left
+
+            // Three corner cases (inverse of single corner)
+            14 => Some(Self::create_inverse_corner_mesh(cell_x, cell_y, 0)), // all except bottom-left
+            13 => Some(Self::create_inverse_corner_mesh(cell_x, cell_y, 1)), // all except bottom-right
+            11 => Some(Self::create_inverse_corner_mesh(cell_x, cell_y, 2)), // all except top-right
+            7 => Some(Self::create_inverse_corner_mesh(cell_x, cell_y, 3)),  // all except top-left
+
+            _ => {
+                // Handle any remaining cases
+                Some(Self::create_generic_mesh(cell_x, cell_y, corners))
+            }
+        }
+    }
+
+    /// Helper function to check if we can sample all 4 corners of a cell
+    fn can_sample_cell(world: &VoxelWorld, x: i32, y: i32) -> bool {
+        let chunk_size = VoxelWorld::chunk_size() as i32;
+
+        for dy in 0..=1 {
+            for dx in 0..=1 {
+                let voxel_x = x + dx;
+                let voxel_y = y + dy;
+                let chunk_x = voxel_x.div_euclid(chunk_size);
+                let chunk_y = voxel_y.div_euclid(chunk_size);
+
+                if !world.is_chunk_loaded(chunk_x, chunk_y) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
 }
 
 #[derive(Debug)]
@@ -337,338 +584,7 @@ struct CellConfiguration {
 }
 
 #[derive(Debug)]
-struct CellMesh {
-    vertices: Vec<Vec2>,
-    triangles: Vec<[u32; 3]>,
-}
-
-fn get_cell_configuration(
-    world: &VoxelWorld,
-    x: i32,
-    y: i32,
-    target_type: VoxelType,
-) -> CellConfiguration {
-    CellConfiguration {
-        corners: [
-            world.get_voxel(x, y) == target_type,         // bottom-left
-            world.get_voxel(x + 1, y) == target_type,     // bottom-right
-            world.get_voxel(x + 1, y + 1) == target_type, // top-right
-            world.get_voxel(x, y + 1) == target_type,     // top-left
-        ],
-    }
-}
-
-fn generate_cell_mesh(config: CellConfiguration, cell_x: f32, cell_y: f32) -> Option<CellMesh> {
-    let corners = config.corners;
-    let case_index = (corners[0] as u8)
-        | ((corners[1] as u8) << 1)
-        | ((corners[2] as u8) << 2)
-        | ((corners[3] as u8) << 3);
-
-    match case_index {
-        0 => None,                                    // All empty
-        15 => Some(create_full_quad(cell_x, cell_y)), // All filled
-
-        // Single corner cases
-        1 => Some(create_corner_mesh(cell_x, cell_y, 0)), // bottom-left
-        2 => Some(create_corner_mesh(cell_x, cell_y, 1)), // bottom-right
-        4 => Some(create_corner_mesh(cell_x, cell_y, 2)), // top-right
-        8 => Some(create_corner_mesh(cell_x, cell_y, 3)), // top-left
-
-        // Adjacent corner cases (edges)
-        3 => Some(create_edge_mesh(cell_x, cell_y, 0)), // bottom edge (corners 0,1)
-        6 => Some(create_edge_mesh(cell_x, cell_y, 1)), // right edge (corners 1,2)
-        12 => Some(create_edge_mesh(cell_x, cell_y, 2)), // top edge (corners 2,3)
-        9 => Some(create_edge_mesh(cell_x, cell_y, 3)), // left edge (corners 3,0)
-
-        // Diagonal cases
-        5 => Some(create_diagonal_mesh(cell_x, cell_y, false)), // bottom-left + top-right
-        10 => Some(create_diagonal_mesh(cell_x, cell_y, true)), // bottom-right + top-left
-
-        // Three corner cases (inverse of single corner)
-        14 => Some(create_inverse_corner_mesh(cell_x, cell_y, 0)), // all except bottom-left
-        13 => Some(create_inverse_corner_mesh(cell_x, cell_y, 1)), // all except bottom-right
-        11 => Some(create_inverse_corner_mesh(cell_x, cell_y, 2)), // all except top-right
-        7 => Some(create_inverse_corner_mesh(cell_x, cell_y, 3)),  // all except top-left
-
-        _ => {
-            // Handle any remaining cases
-            Some(create_generic_mesh(cell_x, cell_y, corners))
-        }
-    }
-}
-
-fn create_full_quad(cell_x: f32, cell_y: f32) -> CellMesh {
-    let base_x = cell_x;
-    let base_y = cell_y;
-
-    CellMesh {
-        vertices: vec![
-            Vec2::new(base_x, base_y),
-            Vec2::new(base_x + 1.0, base_y),
-            Vec2::new(base_x + 1.0, base_y + 1.0),
-            Vec2::new(base_x, base_y + 1.0),
-        ],
-        triangles: vec![[0, 1, 2], [0, 2, 3]],
-    }
-}
-
-fn create_corner_mesh(cell_x: f32, cell_y: f32, corner: usize) -> CellMesh {
-    let base_x = cell_x;
-    let base_y = cell_y;
-
-    match corner {
-        0 => CellMesh {
-            // bottom-left
-            vertices: vec![
-                Vec2::new(base_x, base_y),
-                Vec2::new(base_x + 0.5, base_y),
-                Vec2::new(base_x, base_y + 0.5),
-            ],
-            triangles: vec![[0, 1, 2]],
-        },
-        1 => CellMesh {
-            // bottom-right
-            vertices: vec![
-                Vec2::new(base_x + 1.0, base_y),
-                Vec2::new(base_x + 0.5, base_y),
-                Vec2::new(base_x + 1.0, base_y + 0.5),
-            ],
-            triangles: vec![[0, 1, 2]],
-        },
-        2 => CellMesh {
-            // top-right
-            vertices: vec![
-                Vec2::new(base_x + 1.0, base_y + 1.0),
-                Vec2::new(base_x + 1.0, base_y + 0.5),
-                Vec2::new(base_x + 0.5, base_y + 1.0),
-            ],
-            triangles: vec![[0, 1, 2]],
-        },
-        3 => CellMesh {
-            // top-left
-            vertices: vec![
-                Vec2::new(base_x, base_y + 1.0),
-                Vec2::new(base_x, base_y + 0.5),
-                Vec2::new(base_x + 0.5, base_y + 1.0),
-            ],
-            triangles: vec![[0, 1, 2]],
-        },
-        _ => unreachable!(),
-    }
-}
-
-fn create_inverse_corner_mesh(cell_x: f32, cell_y: f32, corner: usize) -> CellMesh {
-    let base_x = cell_x;
-    let base_y = cell_y;
-
-    // Create full square minus the corner
-    match corner {
-        0 => CellMesh {
-            // all except bottom-left
-            vertices: vec![
-                Vec2::new(base_x + 0.5, base_y),
-                Vec2::new(base_x + 1.0, base_y),
-                Vec2::new(base_x + 1.0, base_y + 1.0),
-                Vec2::new(base_x, base_y + 1.0),
-                Vec2::new(base_x, base_y + 0.5),
-            ],
-            triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
-        },
-        1 => CellMesh {
-            // all except bottom-right (case 13)
-            vertices: vec![
-                Vec2::new(base_x, base_y),
-                Vec2::new(base_x + 0.5, base_y),
-                Vec2::new(base_x + 1.0, base_y + 0.5),
-                Vec2::new(base_x + 1.0, base_y + 1.0),
-                Vec2::new(base_x, base_y + 1.0),
-            ],
-            triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
-        },
-        2 => CellMesh {
-            // all except top-right (case 11)
-            vertices: vec![
-                Vec2::new(base_x, base_y),
-                Vec2::new(base_x + 1.0, base_y),
-                Vec2::new(base_x + 1.0, base_y + 0.5),
-                Vec2::new(base_x + 0.5, base_y + 1.0),
-                Vec2::new(base_x, base_y + 1.0),
-            ],
-            triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
-        },
-        3 => CellMesh {
-            // all except top-left (case 7)
-            vertices: vec![
-                Vec2::new(base_x, base_y),
-                Vec2::new(base_x + 1.0, base_y),
-                Vec2::new(base_x + 1.0, base_y + 1.0),
-                Vec2::new(base_x + 0.5, base_y + 1.0),
-                Vec2::new(base_x, base_y + 0.5),
-            ],
-            triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
-        },
-        _ => unreachable!(),
-    }
-}
-
-fn create_edge_mesh(cell_x: f32, cell_y: f32, edge: usize) -> CellMesh {
-    let base_x = cell_x;
-    let base_y = cell_y;
-
-    match edge {
-        0 => CellMesh {
-            // bottom edge
-            vertices: vec![
-                Vec2::new(base_x, base_y),
-                Vec2::new(base_x + 1.0, base_y),
-                Vec2::new(base_x + 1.0, base_y + 0.5),
-                Vec2::new(base_x, base_y + 0.5),
-            ],
-            triangles: vec![[0, 1, 2], [0, 2, 3]],
-        },
-        1 => CellMesh {
-            // right edge
-            vertices: vec![
-                Vec2::new(base_x + 0.5, base_y),
-                Vec2::new(base_x + 1.0, base_y),
-                Vec2::new(base_x + 1.0, base_y + 1.0),
-                Vec2::new(base_x + 0.5, base_y + 1.0),
-            ],
-            triangles: vec![[0, 1, 2], [0, 2, 3]],
-        },
-        2 => CellMesh {
-            // top edge
-            vertices: vec![
-                Vec2::new(base_x, base_y + 0.5),
-                Vec2::new(base_x + 1.0, base_y + 0.5),
-                Vec2::new(base_x + 1.0, base_y + 1.0),
-                Vec2::new(base_x, base_y + 1.0),
-            ],
-            triangles: vec![[0, 1, 2], [0, 2, 3]],
-        },
-        3 => CellMesh {
-            // left edge
-            vertices: vec![
-                Vec2::new(base_x, base_y),
-                Vec2::new(base_x + 0.5, base_y),
-                Vec2::new(base_x + 0.5, base_y + 1.0),
-                Vec2::new(base_x, base_y + 1.0),
-            ],
-            triangles: vec![[0, 1, 2], [0, 2, 3]],
-        },
-        _ => unreachable!(),
-    }
-}
-
-fn create_diagonal_mesh(cell_x: f32, cell_y: f32, flip: bool) -> CellMesh {
-    let base_x = cell_x;
-    let base_y = cell_y;
-
-    if flip {
-        // bottom-right + top-left
-        CellMesh {
-            vertices: vec![
-                Vec2::new(base_x + 0.5, base_y),       // bottom center
-                Vec2::new(base_x + 1.0, base_y),       // bottom-right
-                Vec2::new(base_x + 1.0, base_y + 0.5), // right center
-                Vec2::new(base_x, base_y + 0.5),       // left center
-                Vec2::new(base_x, base_y + 1.0),       // top-left
-                Vec2::new(base_x + 0.5, base_y + 1.0), // top center
-            ],
-            triangles: vec![
-                [0, 1, 2], // bottom-right triangle
-                [3, 4, 5], // top-left triangle
-            ],
-        }
-    } else {
-        // bottom-left + top-right
-        CellMesh {
-            vertices: vec![
-                Vec2::new(base_x, base_y),             // bottom-left
-                Vec2::new(base_x + 0.5, base_y),       // bottom center
-                Vec2::new(base_x, base_y + 0.5),       // left center
-                Vec2::new(base_x + 0.5, base_y + 1.0), // top center
-                Vec2::new(base_x + 1.0, base_y + 1.0), // top-right
-                Vec2::new(base_x + 1.0, base_y + 0.5), // right center
-            ],
-            triangles: vec![
-                [0, 1, 2], // bottom-left triangle
-                [3, 4, 5], // top-right triangle
-            ],
-        }
-    }
-}
-
-fn create_generic_mesh(cell_x: f32, cell_y: f32, corners: [bool; 4]) -> CellMesh {
-    let mut vertices = Vec::new();
-    let mut triangles = Vec::new();
-
-    // Count filled corners
-    let filled_count = corners.iter().filter(|&&c| c).count();
-    
-    if filled_count == 0 {
-        // No mesh needed
-        return CellMesh { vertices, triangles };
-    }
-    
-    if filled_count == 4 {
-        // All filled - create full quad
-        let base_x = cell_x;
-        let base_y = cell_y;
-        vertices = vec![
-            Vec2::new(base_x, base_y),
-            Vec2::new(base_x + 1.0, base_y),
-            Vec2::new(base_x + 1.0, base_y + 1.0),
-            Vec2::new(base_x, base_y + 1.0),
-        ];
-        triangles = vec![[0, 1, 2], [0, 2, 3]];
-    } else {
-        // For partial fills, create a more conservative mesh
-        // This is a fallback that tries to avoid sharp edges
-        let base_x = cell_x;
-        let base_y = cell_y;
-        let center_x = base_x + 0.5;
-        let center_y = base_y + 0.5;
-        
-        // Create triangular segments for each filled corner
-        if corners[0] { // bottom-left
-            vertices.extend_from_slice(&[
-                Vec2::new(base_x, base_y),
-                Vec2::new(center_x, base_y),
-                Vec2::new(base_x, center_y),
-            ]);
-            let base_idx = vertices.len() as u32 - 3;
-            triangles.push([base_idx, base_idx + 1, base_idx + 2]);
-        }
-        if corners[1] { // bottom-right
-            vertices.extend_from_slice(&[
-                Vec2::new(base_x + 1.0, base_y),
-                Vec2::new(center_x, base_y),
-                Vec2::new(base_x + 1.0, center_y),
-            ]);
-            let base_idx = vertices.len() as u32 - 3;
-            triangles.push([base_idx, base_idx + 2, base_idx + 1]);
-        }
-        if corners[2] { // top-right
-            vertices.extend_from_slice(&[
-                Vec2::new(base_x + 1.0, base_y + 1.0),
-                Vec2::new(base_x + 1.0, center_y),
-                Vec2::new(center_x, base_y + 1.0),
-            ]);
-            let base_idx = vertices.len() as u32 - 3;
-            triangles.push([base_idx, base_idx + 1, base_idx + 2]);
-        }
-        if corners[3] { // top-left
-            vertices.extend_from_slice(&[
-                Vec2::new(base_x, base_y + 1.0),
-                Vec2::new(base_x, center_y),
-                Vec2::new(center_x, base_y + 1.0),
-            ]);
-            let base_idx = vertices.len() as u32 - 3;
-            triangles.push([base_idx, base_idx + 2, base_idx + 1]);
-        }
-    }
-
-    CellMesh { vertices, triangles }
+pub struct CellMesh {
+    pub vertices: Vec<Vec2>,
+    pub triangles: Vec<[u32; 3]>,
 }

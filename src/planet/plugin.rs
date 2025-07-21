@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{planet::{mesh::render_mesh, startup::generate_chunk}, VoxelWorld};
+use crate::{planet::{mesh::MeshRenderer, startup::generate_chunk}, VoxelWorld};
 
 pub struct PlanetPlugin;
 
@@ -8,7 +8,7 @@ impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
         app
             .add_systems(Startup, setup)
-            .add_systems(Update, render_mesh);
+            .add_systems(Update, MeshRenderer::render_mesh);
 
     }
 }
