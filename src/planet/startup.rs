@@ -29,18 +29,18 @@ impl Chunk {
 
 #[derive(Resource)]
 pub struct VoxelWorld {
-    pub(crate) width: usize,
-    pub(crate) height: usize,
+    // pub(crate) width: usize,
+    // pub(crate) height: usize,
     // pub(crate) voxels: Vec<VoxelType>,
     pub loaded_chunks: HashMap<(i32, i32), Chunk>, // Loaded chunks by their world position
 }
 
 impl VoxelWorld {
-    pub fn new(width: usize, height: usize) -> Self {
+    pub fn new() -> Self {
         // let voxels = vec![VoxelType::Air; width * height];
         Self {
-            width,
-            height,
+            // width,
+            // height,
             // voxels,
             loaded_chunks: HashMap::new(),
         }

@@ -14,7 +14,7 @@ impl Plugin for PlanetPlugin {
 }
 
 fn setup(mut commands: Commands) {
-    let mut world = VoxelWorld::new(200, 200);  // Changed from 100x100 to 200x200
+    let mut world = VoxelWorld::new(); 
     // PlanetGenerator::new(100.0, 42).generate_planet(&mut world);
     // generate_terrain(&mut world);
     for cx in 0..8 {
