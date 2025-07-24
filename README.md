@@ -9,13 +9,13 @@
 <h1 align="center">Planet Game</h1>
 
 <p align="center">
-  <img alt="Github top language" src="https://img.shields.io/github/languages/top/aaronkanaron/planet-game?color=56BEB8">
+  <img alt="Github top language" src="https://img.shields.io/github/languages/top/aaronkanaron/planet-game?color=8B0000">
 
-  <img alt="Github language count" src="https://img.shields.io/github/languages/count/aaronkanaron/planet-game?color=56BEB8">
+  <img alt="Github language count" src="https://img.shields.io/github/languages/count/aaronkanaron/planet-game?color=8B0000">
 
-  <img alt="Repository size" src="https://img.shields.io/github/repo-size/aaronkanaron/planet-game?color=56BEB8">
+  <img alt="Repository size" src="https://img.shields.io/github/repo-size/aaronkanaron/planet-game?color=8B0000">
 
-  <img alt="License" src="https://img.shields.io/github/license/aaronkanaron/planet-game?color=56BEB8">
+  <img alt="License" src="https://img.shields.io/github/license/aaronkanaron/planet-game?color=8B0000">
 
   <!-- <img alt="Github issues" src="https://img.shields.io/github/issues/aaronkanaron/planet-game?color=56BEB8" /> -->
 
@@ -46,27 +46,37 @@
 
 ## :dart: About ##
 
-Describe your project
+Planet Game is a 2D voxel-based terrain generation and editing game built with Rust and the Bevy game engine. The game features procedural terrain generation using Perlin noise, creating seamless worlds with different materials like rock, dirt, and air. Players can interact with the terrain by digging and modifying the voxel world in real-time.
+
+The project demonstrates advanced techniques in:
+- Procedural terrain generation using multi-octave Perlin noise
+- Seamless chunk-based world loading
+- Real-time mesh generation and optimization
+- Dual contouring and greedy meshing algorithms
+- Interactive voxel manipulation
 
 ## :sparkles: Features ##
 
-:heavy_check_mark: Feature 1;\
-:heavy_check_mark: Feature 2;\
-:heavy_check_mark: Feature 3;
+:heavy_check_mark: **Procedural Terrain Generation** - Multi-layered Perlin noise creates realistic, varied landscapes;\
+:heavy_check_mark: **Seamless Chunk System** - Infinite world generation with smooth chunk boundaries;\
+:heavy_check_mark: **Real-time Voxel Editing** - Click to dig and modify terrain with immediate visual feedback;\
+:heavy_check_mark: **Optimized Rendering** - Dual contouring and greedy meshing for efficient 2D mesh generation;\
+:heavy_check_mark: **Multiple Material Types** - Rock, dirt, and air with smooth transitions;\
+:heavy_check_mark: **Interactive Camera** - 2D camera system for exploring the generated world;
 
 ## :rocket: Technologies ##
 
-The following tools were used in this project:
+The following tools and libraries were used in this project:
 
-- [Expo](https://expo.io/)
-- [Node.js](https://nodejs.org/en/)
-- [React](https://pt-br.reactjs.org/)
-- [React Native](https://reactnative.dev/)
-- [TypeScript](https://www.typescriptlang.org/)
+- [Rust](https://www.rust-lang.org/) - Systems programming language for performance and safety
+- [Bevy](https://bevyengine.org/) - Modern game engine built in Rust
+- [noise-rs](https://github.com/Razaekel/noise-rs) - Procedural noise generation library
+- [nalgebra](https://nalgebra.org/) - Linear algebra library for 3D mathematics
+- [once_cell](https://github.com/matklad/once_cell) - Single-assignment cells for lazy static initialization
 
 ## :white_check_mark: Requirements ##
 
-Before starting :checkered_flag:, you need to have [Git](https://git-scm.com) and [Node](https://nodejs.org/en/) installed.
+Before starting :checkered_flag:, you need to have [Git](https://git-scm.com) and [Rust](https://rustup.rs/) installed.
 
 ## :checkered_flag: Starting ##
 
@@ -74,16 +84,34 @@ Before starting :checkered_flag:, you need to have [Git](https://git-scm.com) an
 # Clone this project
 $ git clone https://github.com/aaronkanaron/planet-game
 
-# Access
+# Access the project directory
 $ cd planet-game
 
-# Install dependencies
-$ yarn
+# Build the project
+$ cargo build
 
-# Run the project
-$ yarn start
+# Run the game
+$ cargo run
 
-# The server will initialize in the <http://localhost:3000>
+# For optimized release build
+$ cargo run --release
+```
+
+### Controls
+
+- **Left Mouse Button**: Dig terrain (removes voxels in a small area)
+- **Mouse Movement**: Observe the procedurally generated terrain
+
+### Project Structure
+
+```
+src/
+├── main.rs              # Main game loop and input handling
+├── planet/
+│   ├── plugin.rs        # Bevy plugin for planet systems
+│   ├── startup.rs       # Chunk generation and voxel world management
+│   ├── mesh.rs          # Dual contouring mesh generation
+│   └── greedy_mesh.rs   # Greedy meshing optimization
 ```
 
 ## :memo: License ##
@@ -91,7 +119,7 @@ $ yarn start
 This project is under license from MIT. For more details, see the [LICENSE](LICENSE.md) file.
 
 
-Made with :heart: by <a href="https://github.com/aaronkanaron" target="_blank">{{YOUR_NAME}}</a>
+Made with :heart: by <a href="https://github.com/aaronkanaron" target="_blank">Aaron Clauss</a>
 
 &#xa0;
 
