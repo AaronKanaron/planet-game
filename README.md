@@ -17,3 +17,14 @@
 
   <img alt="License" src="https://img.shields.io/github/license/aaronkanaron/planet-game?color=8B0000">
 </p>
+
+### Setup
+Install pre-commit:
+```bash
+pip install pre-commit
+```
+
+Then run:
+```bash
+sh setup.sh
+```
