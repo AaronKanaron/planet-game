@@ -1,4 +1,7 @@
 use crate::planet::mesh::{MeshRenderer, chunk::Chunk, chunk_world::ChunkWorld};
+use crate::planet::culling::ChunkCullingBox;
+use crate::planet::culling_system::{chunk_culling_system, draw_culling_box_gizmo, culling_box_input_system};
+use crate::planet::debug::{setup_debug_ui, update_debug_info};
 use bevy::prelude::*;
 
 pub struct PlanetPlugin;
@@ -7,8 +10,9 @@ impl PlanetPlugin {
     fn setup(mut commands: Commands) {
         let mut world = ChunkWorld::new();
 
-        for cx in 0..8 {
-            for cy in 0..8 {
+        // Load initial chunks in a smaller area since we'll use culling
+        for cx in 0..4 {
+            for cy in 0..4 {
                 let chunk = Chunk::generate(cx as i32, cy as i32, &world.noise);
                 world.loaded_chunks.insert((cx as i32, cy as i32), chunk);
             }
@@ -18,12 +22,22 @@ impl PlanetPlugin {
         world.mark_all_chunks_dirty();
 
         commands.insert_resource(world);
+        
+        // Initialize the culling box resource
+        commands.insert_resource(ChunkCullingBox::default());
     }
 }
 
 impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, Self::setup)
-            .add_systems(Update, MeshRenderer::render_mesh);
+        app.add_systems(Startup, (Self::setup, setup_debug_ui))
+            .add_systems(Update, (
+                chunk_culling_system,
+                MeshRenderer::cleanup_unloaded_chunks,
+                MeshRenderer::render_mesh,
+                draw_culling_box_gizmo,
+                culling_box_input_system,
+                update_debug_info,
+            ).chain()); // Use chain() to ensure proper ordering
     }
 }

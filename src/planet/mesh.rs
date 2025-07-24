@@ -34,6 +34,19 @@ pub struct ChunkMesh {
 pub struct MeshRenderer;
 
 impl MeshRenderer {
+    /// Despawn mesh entities for chunks that are no longer loaded
+    pub fn cleanup_unloaded_chunks(
+        mut commands: Commands,
+        world: Res<ChunkWorld>,
+        existing_chunks: Query<(Entity, &ChunkMesh)>,
+    ) {
+        for (entity, chunk_mesh) in existing_chunks.iter() {
+            if !world.is_chunk_loaded(chunk_mesh.chunk_x, chunk_mesh.chunk_y) {
+                commands.entity(entity).despawn();
+            }
+        }
+    }
+
     /// This updates the planet mesh by only regenerating the dirty, "changed" chunks.
     pub fn render_mesh(
         mut commands: Commands,
@@ -56,11 +69,12 @@ impl MeshRenderer {
 
         // Regenerate meshes for dirty chunks only
         for &(chunk_x, chunk_y) in &dirty_chunks {
-            for &material_type in &[VoxelType::Rock, VoxelType::Dirt] {
-                if !world.is_chunk_loaded(chunk_x, chunk_y) {
-                    continue;
-                }
+            // Skip if chunk is no longer loaded (might have been unloaded)
+            if !world.is_chunk_loaded(chunk_x, chunk_y) {
+                continue;
+            }
 
+            for &material_type in &[VoxelType::Rock, VoxelType::Dirt] {
                 let (vertices, indices) =
                     DualContourer::generate_chunk_mesh(&world, chunk_x, chunk_y, material_type);
                 if !vertices.is_empty() && !indices.is_empty() {

@@ -132,14 +132,14 @@ impl GreedyMeshHandler {
         let h = quad.height as f32;
 
         vertices.extend_from_slice(&[
-            [x * VOXEL_SIZE - 400.0, 300.0 - y * VOXEL_SIZE, 0.0], // bottom-left
-            [(x + w) * VOXEL_SIZE - 400.0, 300.0 - y * VOXEL_SIZE, 0.0], // bottom-right
+            [x * VOXEL_SIZE, y * VOXEL_SIZE, 0.0], // bottom-left
+            [(x + w) * VOXEL_SIZE, y * VOXEL_SIZE, 0.0], // bottom-right
             [
-                (x + w) * VOXEL_SIZE - 400.0,
-                300.0 - (y + h) * VOXEL_SIZE,
+                (x + w) * VOXEL_SIZE,
+                (y + h) * VOXEL_SIZE,
                 0.0,
             ], // top-right
-            [x * VOXEL_SIZE - 400.0, 300.0 - (y + h) * VOXEL_SIZE, 0.0], // top-left
+            [x * VOXEL_SIZE, (y + h) * VOXEL_SIZE, 0.0], // top-left
         ]);
 
         // Add indices for two triangles

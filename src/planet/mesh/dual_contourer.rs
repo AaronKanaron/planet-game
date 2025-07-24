@@ -41,7 +41,7 @@ impl DualContourer {
         let mut complex_meshes = Vec::new();
 
         // Generate cells for this chunk, including boundary cells for seamless connection
-        // We'll include boundaries but use chunk ownership rules to avoid duplicates
+        // We need to generate cells for the boundaries to ensure seamless edges
         for world_y in world_min_y..world_max_y {
             for world_x in world_min_x..world_max_x {
                 // Check if this cell "belongs" to this chunk to avoid duplicates
@@ -51,25 +51,23 @@ impl DualContourer {
 
                 // Only process cells that belong to this chunk
                 if cell_chunk_x == chunk_x && cell_chunk_y == chunk_y {
-                    // Only create cells where we can sample all 4 corners
-                    if Self::can_sample_cell(world, world_x, world_y) {
-                        let cell =
-                            Self::get_cell_configuration(world, world_x, world_y, target_type);
+                    // Try to create cells even if neighbors aren't loaded
+                    // For boundary cells, we'll use Air as default for missing voxels
+                    let cell = Self::get_cell_configuration(world, world_x, world_y, target_type);
 
-                        if let Some(cell_mesh) =
-                            Self::generate_cell_mesh(cell, world_x as f32, world_y as f32)
-                        {
-                            // Check if this is a simple full quad that can be greedy meshed
-                            if GreedyMeshHandler::is_full_quad_mesh(
-                                &cell_mesh,
-                                world_x as f32,
-                                world_y as f32,
-                            ) {
-                                mesh_quads.push((world_x, world_y));
-                            } else {
-                                // Complex shapes go directly into the final mesh
-                                complex_meshes.push(cell_mesh);
-                            }
+                    if let Some(cell_mesh) =
+                        Self::generate_cell_mesh(cell, world_x as f32, world_y as f32)
+                    {
+                        // Check if this is a simple full quad that can be greedy meshed
+                        if GreedyMeshHandler::is_full_quad_mesh(
+                            &cell_mesh,
+                            world_x as f32,
+                            world_y as f32,
+                        ) {
+                            mesh_quads.push((world_x, world_y));
+                        } else {
+                            // Complex shapes go directly into the final mesh
+                            complex_meshes.push(cell_mesh);
                         }
                     }
                 }
@@ -94,11 +92,11 @@ impl DualContourer {
         for cell_mesh in complex_meshes {
             let vertex_offset = vertices.len() as u32;
 
-            // Add vertices
+            // Add vertices with proper world positioning
             for vertex in cell_mesh.vertices {
                 vertices.push([
-                    vertex.x * VOXEL_SIZE - 400.0,
-                    300.0 - vertex.y * VOXEL_SIZE,
+                    vertex.x * VOXEL_SIZE,
+                    vertex.y * VOXEL_SIZE,
                     0.0,
                 ]);
             }
@@ -115,19 +113,32 @@ impl DualContourer {
     }
 
     // v--------- Private methods ----------v //
-
     fn get_cell_configuration(
         world: &ChunkWorld,
         x: i32,
         y: i32,
         target_type: VoxelType,
     ) -> CellConfiguration {
+        let chunk_size = ChunkWorld::chunk_size() as i32;
+        
+        // Helper function to safely get voxel, defaulting to Air if chunk not loaded
+        let safe_get_voxel = |vx: i32, vy: i32| -> VoxelType {
+            let chunk_x = vx.div_euclid(chunk_size);
+            let chunk_y = vy.div_euclid(chunk_size);
+            
+            if world.is_chunk_loaded(chunk_x, chunk_y) {
+                world.get_voxel(vx, vy)
+            } else {
+                VoxelType::Air // Default to Air for missing chunks
+            }
+        };
+        
         CellConfiguration {
             corners: [
-                world.get_voxel(x, y) == target_type,         // bottom-left
-                world.get_voxel(x + 1, y) == target_type,     // bottom-right
-                world.get_voxel(x + 1, y + 1) == target_type, // top-right
-                world.get_voxel(x, y + 1) == target_type,     // top-left
+                safe_get_voxel(x, y) == target_type,         // bottom-left
+                safe_get_voxel(x + 1, y) == target_type,     // bottom-right
+                safe_get_voxel(x + 1, y + 1) == target_type, // top-right
+                safe_get_voxel(x, y + 1) == target_type,     // top-left
             ],
         }
     }
@@ -457,22 +468,22 @@ impl DualContourer {
         }
     }
 
-    /// Helper function to check if we can sample all 4 corners of a cell
-    fn can_sample_cell(world: &ChunkWorld, x: i32, y: i32) -> bool {
-        let chunk_size = ChunkWorld::chunk_size() as i32;
+    // Helper function to check if we can sample all 4 corners of a cell
+    // fn can_sample_cell(world: &ChunkWorld, x: i32, y: i32) -> bool {
+    //     let chunk_size = ChunkWorld::chunk_size() as i32;
 
-        for dy in 0..=1 {
-            for dx in 0..=1 {
-                let voxel_x = x + dx;
-                let voxel_y = y + dy;
-                let chunk_x = voxel_x.div_euclid(chunk_size);
-                let chunk_y = voxel_y.div_euclid(chunk_size);
+    //     for dy in 0..=1 {
+    //         for dx in 0..=1 {
+    //             let voxel_x = x + dx;
+    //             let voxel_y = y + dy;
+    //             let chunk_x = voxel_x.div_euclid(chunk_size);
+    //             let chunk_y = voxel_y.div_euclid(chunk_size);
 
-                if !world.is_chunk_loaded(chunk_x, chunk_y) {
-                    return false;
-                }
-            }
-        }
-        true
-    }
+    //             if !world.is_chunk_loaded(chunk_x, chunk_y) {
+    //                 return false;
+    //             }
+    //         }
+    //     }
+    //     true
+    // }
 }
