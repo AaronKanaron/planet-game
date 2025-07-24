@@ -7,7 +7,9 @@ use bevy::{
 use crate::{VoxelType, VoxelWorld, planet::greedy_mesh::GreedyMeshHandler};
 
 // Voxel size in world units
-pub(crate) const VOXEL_SIZE: f32 = 8.0;
+pub(crate) const VOXEL_SIZE: f32 = 4.0;
+const WIREFRAME_MODE: bool = false; // Enable wireframe mode for debugging
+const DEBUG_MODE: bool = false; // Enable debug mode for additional logging
 
 #[derive(Component)]
 pub struct Voxel;
@@ -32,25 +34,30 @@ impl MeshRenderer {
     ) {
         // Get all dirty chunks
         let dirty_chunks = world.get_dirty_chunks();
-        
+
         if dirty_chunks.is_empty() {
             return; // Nothing to update
         }
 
         // Statistics tracking
-        println!("=== MESH GENERATION STATISTICS ===");
-        println!("Dirty chunks to process: {}", dirty_chunks.len());
         let start_time = std::time::Instant::now();
+        if DEBUG_MODE {
+            println!("=== MESH GENERATION STATISTICS ===");
+            println!("Dirty chunks to process: {}", dirty_chunks.len());
+        }
+        let mut despawned_entities = 0;
 
         // Despawn entities only for dirty chunks
-        let mut despawned_entities = 0;
         for (entity, chunk_mesh) in existing_chunks.iter() {
             if dirty_chunks.contains(&(chunk_mesh.chunk_x, chunk_mesh.chunk_y)) {
                 commands.entity(entity).despawn();
                 despawned_entities += 1;
             }
         }
-        println!("Despawned {} existing entities", despawned_entities);
+
+        if DEBUG_MODE {
+            println!("Despawned {} existing entities", despawned_entities);
+        }
 
         // Statistics for mesh generation
         let mut total_vertices = 0;
@@ -60,8 +67,10 @@ impl MeshRenderer {
 
         // Regenerate meshes for dirty chunks only
         for &(chunk_x, chunk_y) in &dirty_chunks {
-            println!("Processing chunk ({}, {})", chunk_x, chunk_y);
-            
+            if DEBUG_MODE {
+                println!("Processing chunk ({}, {})", chunk_x, chunk_y);
+            }
+
             for &material_type in &[VoxelType::Rock, VoxelType::Dirt] {
                 let chunk_start_time = std::time::Instant::now();
                 let (vertices, indices) =
@@ -69,14 +78,20 @@ impl MeshRenderer {
                 let generation_time = chunk_start_time.elapsed();
 
                 if !vertices.is_empty() && !indices.is_empty() {
-                    println!("  {}: {} vertices, {} indices ({}ms)", 
+                    if DEBUG_MODE {
+                        println!(
+                            "  {}: {} vertices, {} indices ({}ms)",
                             match material_type {
                                 VoxelType::Rock => "Rock",
-                                VoxelType::Dirt => "Dirt", 
+                                VoxelType::Dirt => "Dirt",
                                 VoxelType::Air => "Air",
-                            }, vertices.len(), indices.len(), 
-                            generation_time.as_millis());
-                    
+                            },
+                            vertices.len(),
+                            indices.len(),
+                            generation_time.as_millis()
+                        );
+                    }
+
                     total_vertices += vertices.len();
                     total_indices += indices.len();
                     processed_material_types += 1;
@@ -89,7 +104,8 @@ impl MeshRenderer {
                     filled_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices.clone());
 
                     // Generate normals (all facing forward for 2D)
-                    let normals: Vec<[f32; 3]> = (0..vertices.len()).map(|_| [0.0, 0.0, 1.0]).collect();
+                    let normals: Vec<[f32; 3]> =
+                        (0..vertices.len()).map(|_| [0.0, 0.0, 1.0]).collect();
                     filled_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
 
                     filled_mesh.insert_indices(Indices::U32(indices.clone()));
@@ -106,14 +122,15 @@ impl MeshRenderer {
                         MeshMaterial2d(materials.add(ColorMaterial::from(fill_color))),
                         Transform::default(),
                         Voxel,
-                        ChunkMesh {
-                            chunk_x,
-                            chunk_y,
-                        },
+                        ChunkMesh { chunk_x, chunk_y },
                     ));
                     spawned_entities += 1;
 
                     // Create wireframe mesh
+                    if !WIREFRAME_MODE {
+                        continue; // Skip wireframe if not enabled
+                    }
+
                     let wireframe_indices = Self::generate_wireframe_indices(&indices);
 
                     if !wireframe_indices.is_empty() {
@@ -132,29 +149,45 @@ impl MeshRenderer {
                             ),
                             Transform::from_xyz(0.0, 0.0, 0.1), // Slightly in front
                             Voxel,
-                            ChunkMesh {
-                                chunk_x,
-                                chunk_y,
-                            },
+                            ChunkMesh { chunk_x, chunk_y },
                         ));
                         spawned_entities += 1;
                     }
                 }
             }
-            
+
             // Mark chunk as clean after processing
             world.mark_chunk_clean(chunk_x, chunk_y);
         }
-        
+
         // Print final statistics
         let total_time = start_time.elapsed();
-        println!("=== SUMMARY ===");
-        println!("Total time: {}ms", total_time.as_millis());
-        println!("Processed {} material types across {} chunks", processed_material_types, dirty_chunks.len());
-        println!("Total vertices: {}, Total indices: {}", total_vertices, total_indices);
-        println!("Spawned {} new entities, Despawned {} old entities", spawned_entities, despawned_entities);
-        println!("Average vertices per chunk: {:.1}", if dirty_chunks.len() > 0 { total_vertices as f32 / dirty_chunks.len() as f32 } else { 0.0 });
-        println!("=====================================");
+        if DEBUG_MODE {
+            println!("=== SUMMARY ===");
+            println!("Total time: {}ms", total_time.as_millis());
+            println!(
+                "Processed {} material types across {} chunks",
+                processed_material_types,
+                dirty_chunks.len()
+            );
+            println!(
+                "Total vertices: {}, Total indices: {}",
+                total_vertices, total_indices
+            );
+            println!(
+                "Spawned {} new entities, Despawned {} old entities",
+                spawned_entities, despawned_entities
+            );
+            println!(
+                "Average vertices per chunk: {:.1}",
+                if dirty_chunks.len() > 0 {
+                    total_vertices as f32 / dirty_chunks.len() as f32
+                } else {
+                    0.0
+                }
+            );
+            println!("=====================================");
+        }
     }
 
     fn generate_wireframe_indices(triangle_indices: &[u32]) -> Vec<u32> {
@@ -217,13 +250,14 @@ impl DualContourer {
                 // A cell belongs to the chunk containing its bottom-left corner
                 let cell_chunk_x = world_x.div_euclid(chunk_size);
                 let cell_chunk_y = world_y.div_euclid(chunk_size);
-                
+
                 // Only process cells that belong to this chunk
                 if cell_chunk_x == chunk_x && cell_chunk_y == chunk_y {
                     // Only create cells where we can sample all 4 corners
                     if Self::can_sample_cell(world, world_x, world_y) {
                         voxel_accesses += 4; // We access 4 corners for each cell
-                        let cell = Self::get_cell_configuration(world, world_x, world_y, target_type);
+                        let cell =
+                            Self::get_cell_configuration(world, world_x, world_y, target_type);
                         cells_processed += 1;
 
                         if let Some(cell_mesh) =
@@ -265,11 +299,23 @@ impl DualContourer {
             VoxelType::Dirt => "Dirt",
             VoxelType::Air => "Air",
         };
-        println!("    [{}] Chunk ({},{}) stats:", material_name, chunk_x, chunk_y);
-        println!("      Cells: {} processed, {} skipped", cells_processed, cells_skipped);
-        println!("      Voxel accesses: {}", voxel_accesses);
-        println!("      Meshes: {} quads for greedy → {} greedy quads, {} complex", 
-                quads_for_greedy, greedy_quads.len(), complex_meshes_count);
+        if DEBUG_MODE {
+            println!(
+                "    [{}] Chunk ({},{}) stats:",
+                material_name, chunk_x, chunk_y
+            );
+            println!(
+                "      Cells: {} processed, {} skipped",
+                cells_processed, cells_skipped
+            );
+            println!("      Voxel accesses: {}", voxel_accesses);
+            println!(
+                "      Meshes: {} quads for greedy → {} greedy quads, {} complex",
+                quads_for_greedy,
+                greedy_quads.len(),
+                complex_meshes_count
+            );
+        }
 
         // Add greedy meshed quads to the final mesh
         for quad in greedy_quads {
