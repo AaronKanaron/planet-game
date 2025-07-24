@@ -9,11 +9,12 @@ use bevy::{
     render::mesh::{Indices, PrimitiveTopology},
 };
 
-use crate::planet::mesh::{chunk_world::ChunkWorld, dual_contourer::DualContourer};
+use crate::planet::{mesh::{chunk_world::ChunkWorld, dual_contourer::DualContourer}, planet_material::DirtMaterial};
+use crate::planet::planet_material::RockMaterial;
 
 /// Voxel size in world units
 pub const VOXEL_SIZE: f32 = 6.0;
-const WIREFRAME_MODE: bool = true;
+const WIREFRAME_MODE: bool = false;
 
 #[derive(Component)]
 pub struct Voxel;
@@ -53,6 +54,8 @@ impl MeshRenderer {
         mut world: ResMut<ChunkWorld>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<ColorMaterial>>,
+        mut rock_materials: ResMut<Assets<RockMaterial>>,
+        mut dirt_materials: ResMut<Assets<DirtMaterial>>,
         existing_chunks: Query<(Entity, &ChunkMesh)>,
     ) {
         let dirty_chunks = world.get_dirty_chunks();
@@ -89,21 +92,45 @@ impl MeshRenderer {
                     filled_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices.clone());
                     filled_mesh.insert_indices(Indices::U32(indices.clone()));
 
-                    // TODO: TEMPORARY
-                    let fill_color = match material_type {
-                        VoxelType::Air => Color::srgba(0.0, 0.0, 0.0, 0.0),
-                        VoxelType::Rock => Color::srgb(0.4, 0.4, 0.4),
-                        VoxelType::Dirt => Color::srgb(0.6, 0.4, 0.2),
-                    };
+                    // Calculate mesh size for shader normalization
+                    let mesh_size = Self::calculate_mesh_size(&vertices);
 
-                    // Spawn filled mesh
-                    commands.spawn((
-                        Mesh2d(meshes.add(filled_mesh)),
-                        MeshMaterial2d(materials.add(ColorMaterial::from(fill_color))),
-                        Transform::default(),
-                        Voxel,
-                        ChunkMesh { chunk_x, chunk_y },
-                    ));
+                    // Spawn filled mesh with different material based on type
+                    match material_type {
+                        VoxelType::Rock => {
+                            // Use custom rock material with WGSL shader - brighter base color
+                            let rock_material = RockMaterial {
+                                color: LinearRgba::rgb(0.5, 0.5, 0.5), // Brighter gray for more visible shader effects
+                                mesh_size,
+                            };
+
+                            commands.spawn((
+                                Mesh2d(meshes.add(filled_mesh)),
+                                MeshMaterial2d(rock_materials.add(rock_material)),
+                                Transform::default(),
+                                Voxel,
+                                ChunkMesh { chunk_x, chunk_y },
+                            ));
+                        },
+                        VoxelType::Dirt => {
+                            // Use regular ColorMaterial for dirt
+                            let dirt_material = DirtMaterial {
+                                color: LinearRgba::rgb(0.4, 0.2, 0.0), // Brighter gray for more visible shader effects
+                                mesh_size,
+                            };
+                            commands.spawn((
+                                Mesh2d(meshes.add(filled_mesh)),
+                                MeshMaterial2d(dirt_materials.add(dirt_material)),
+                                Transform::default(),
+                                Voxel,
+                                ChunkMesh { chunk_x, chunk_y },
+                            ));
+                        },
+                        VoxelType::Air => {
+                            // Skip air voxels
+                            continue;
+                        },
+                    }
 
                     // Create wireframe mesh
                     if WIREFRAME_MODE {
@@ -128,6 +155,30 @@ impl MeshRenderer {
 
     fn generate_mesh_normals(vertices: &Vec<[f32; 3]>) -> Vec<[f32; 3]> {
         vec![[0.0, 0.0, 1.0]; vertices.len()]
+    }
+
+    /// Calculate the AABB size of the mesh vertices
+    fn calculate_mesh_size(vertices: &Vec<[f32; 3]>) -> Vec3 {
+        if vertices.is_empty() {
+            return Vec3::ONE;
+        }
+
+        let mut min_bounds = Vec3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
+        let mut max_bounds = Vec3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
+
+        for vertex in vertices {
+            let pos = Vec3::new(vertex[0], vertex[1], vertex[2]);
+            min_bounds = min_bounds.min(pos);
+            max_bounds = max_bounds.max(pos);
+        }
+
+        let size = max_bounds - min_bounds;
+        // Ensure minimum size to avoid division by zero
+        Vec3::new(
+            size.x.max(1.0),
+            size.y.max(1.0),
+            size.z.max(1.0),
+        )
     }
 
     /// For debugging: spawn a wireframe mesh for the chunk.

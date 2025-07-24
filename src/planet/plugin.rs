@@ -2,6 +2,7 @@ use crate::planet::mesh::{MeshRenderer, chunk::Chunk, chunk_world::ChunkWorld};
 use crate::planet::culling::ChunkCullingBox;
 use crate::planet::culling_system::{chunk_culling_system, draw_culling_box_gizmo, culling_box_input_system};
 use crate::planet::debug::{setup_debug_ui, update_debug_info};
+use crate::planet::planet_material::PlanetMaterialPlugin;
 use bevy::prelude::*;
 
 pub struct PlanetPlugin;
@@ -30,7 +31,8 @@ impl PlanetPlugin {
 
 impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (Self::setup, setup_debug_ui))
+        app.add_plugins(PlanetMaterialPlugin)
+            .add_systems(Startup, (Self::setup, setup_debug_ui))
             .add_systems(Update, (
                 chunk_culling_system,
                 MeshRenderer::cleanup_unloaded_chunks,

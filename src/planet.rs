@@ -3,3 +3,4 @@ pub mod plugin;
 pub mod culling;
 pub mod culling_system;
 pub mod debug;
+pub mod planet_material;
