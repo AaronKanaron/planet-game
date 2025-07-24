@@ -1,27 +1,34 @@
 mod planet;
+mod camera;
 
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::input::ButtonInput;
 use bevy::window::WindowPlugin;
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
+use crate::camera::CameraPlugin;
 use crate::planet::mesh::chunk_world::ChunkWorld;
 use crate::planet::mesh::{VOXEL_SIZE, VoxelType};
 use crate::planet::plugin::PlanetPlugin;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Planet Game 2".to_string(),
-                resolution: (800.0, 600.0).into(),
-                ..default()
-            }),
-            ..Default::default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Planet Game 2".to_string(),
+                        resolution: (800.0, 600.0).into(),
+                        ..default()
+                    }),
+                    ..Default::default()
+                })
+                .set(ImagePlugin::default_nearest()),
+        )
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .add_plugins(LogDiagnosticsPlugin::default())
         .add_plugins(PlanetPlugin)
+        // .add_plugins(CameraPlugin)
         .add_systems(Startup, setup)
         .add_systems(Update, handle_input)
         .run();
@@ -76,7 +83,5 @@ fn handle_input(
         world.set_voxel((world_x) as i32, (world_y - 1) as i32, VoxelType::Air);
         world.set_voxel((world_x + 1) as i32, (world_y - 1) as i32, VoxelType::Air);
         world.set_voxel((world_x - 1) as i32, (world_y + 1) as i32, VoxelType::Air);
-        
-
     }
 }
