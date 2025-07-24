@@ -115,7 +115,7 @@ impl MeshRenderer {
                         VoxelType::Dirt => {
                             // Use regular ColorMaterial for dirt
                             let dirt_material = DirtMaterial {
-                                color: LinearRgba::rgb(0.4, 0.2, 0.0), // Brighter gray for more visible shader effects
+                                color: LinearRgba::rgb(0.4, 0.26, 0.19), // Brighter gray for more visible shader effects
                                 mesh_size,
                             };
                             commands.spawn((
