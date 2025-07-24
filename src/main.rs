@@ -77,19 +77,19 @@ fn handle_input(
 
         if world_x >= 0 && world_y >= 0 {
             world.set_voxel(world_x as i32, world_y as i32, VoxelType::Air);
-            // world.set_voxel((world_x + 1) as i32, (world_y) as i32, VoxelType::Air);
-            // world.set_voxel(
-            //     (world_x + 1) as i32,
-            //     (world_y + 1) as i32,
-            //     VoxelType::Air,
-            // );
-            // world.set_voxel((world_x) as i32, (world_y + 1) as i32, VoxelType::Air);
-            // world.set_voxel((world_x - 1) as i32, (world_y) as i32, VoxelType::Air);
-            // world.set_voxel(
-            //     (world_x - 1) as i32,
-            //     (world_y - 1) as i32,
-            //     VoxelType::Air,
-            // );
+            world.set_voxel((world_x + 1) as i32, (world_y) as i32, VoxelType::Air);
+            world.set_voxel(
+                (world_x + 1) as i32,
+                (world_y + 1) as i32,
+                VoxelType::Air,
+            );
+            world.set_voxel((world_x) as i32, (world_y + 1) as i32, VoxelType::Air);
+            world.set_voxel((world_x - 1) as i32, (world_y) as i32, VoxelType::Air);
+            world.set_voxel(
+                (world_x - 1) as i32,
+                (world_y - 1) as i32,
+                VoxelType::Air,
+            );
             // world.set_voxel((world_x) as i32, (world_y - 1) as i32, VoxelType::Air);
             // world.set_voxel(
             //     (world_x + 1) as i32,

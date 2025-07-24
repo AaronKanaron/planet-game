@@ -7,7 +7,7 @@ use bevy::{
 use crate::{VoxelType, VoxelWorld, planet::greedy_mesh::GreedyMeshHandler};
 
 // Voxel size in world units
-pub(crate) const VOXEL_SIZE: f32 = 4.0;
+pub(crate) const VOXEL_SIZE: f32 = 6.0;
 const WIREFRAME_MODE: bool = false; // Enable wireframe mode for debugging
 const DEBUG_MODE: bool = false; // Enable debug mode for additional logging
 
