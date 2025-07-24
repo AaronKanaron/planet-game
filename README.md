@@ -32,7 +32,7 @@
 
 <hr> -->
 
-<p align="center">
+<!-- <p align="center">
   <a href="#dart-about">About</a> &#xa0; | &#xa0; 
   <a href="#sparkles-features">Features</a> &#xa0; | &#xa0;
   <a href="#rocket-technologies">Technologies</a> &#xa0; | &#xa0;
@@ -40,11 +40,11 @@
   <a href="#checkered_flag-starting">Starting</a> &#xa0; | &#xa0;
   <a href="#memo-license">License</a> &#xa0; | &#xa0;
   <a href="https://github.com/aaronkanaron" target="_blank">Author</a>
-</p>
+</p> -->
 
 <br>
 
-## :dart: About ##
+## About ##
 
 Planet Game is a 2D voxel-based terrain generation and editing game built with Rust and the Bevy game engine. The game features procedural terrain generation using Perlin noise, creating seamless worlds with different materials like rock, dirt, and air. Players can interact with the terrain by digging and modifying the voxel world in real-time.
 
@@ -74,7 +74,7 @@ The following tools and libraries were used in this project:
 - [nalgebra](https://nalgebra.org/) - Linear algebra library for 3D mathematics
 - [once_cell](https://github.com/matklad/once_cell) - Single-assignment cells for lazy static initialization
 
-## :white_check_mark: Requirements ##
+<!-- ## :white_check_mark: Requirements ##
 
 Before starting :checkered_flag:, you need to have [Git](https://git-scm.com) and [Rust](https://rustup.rs/) installed.
 
@@ -95,7 +95,7 @@ $ cargo run
 
 # For optimized release build
 $ cargo run --release
-```
+``` -->
 
 ### Controls
 
@@ -116,11 +116,10 @@ src/
 
 ## :memo: License ##
 
-This project is under license from MIT. For more details, see the [LICENSE](LICENSE.md) file.
-
+This project is under license from MIT. For more details, see the [LICENSE](LICENSE) file.
 
 Made with :heart: by <a href="https://github.com/aaronkanaron" target="_blank">Aaron Clauss</a>
 
-&#xa0;
+<!-- &#xa0; -->
 
-<a href="#top">Back to top</a>
+<!-- <a href="#top">Back to top</a> -->
