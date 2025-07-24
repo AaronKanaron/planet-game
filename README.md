@@ -1,12 +1,12 @@
 <div align="center" id="top"> 
-  <img src="./.git/app.png" alt="Planet Game" />
+  <img src="./resources/app.png" alt="Planet Game" />
 
   &#xa0;
 
   <!-- <a href="https://planet-game.netlify.app">Demo</a> -->
 </div>
 
-<h1 align="center">planet-game</h1>
+<h1 align="center">Planet Game</h1>
 
 <p align="center">
   <img alt="Github top language" src="https://img.shields.io/github/languages/top/aaronkanaron/planet-game?color=56BEB8">
