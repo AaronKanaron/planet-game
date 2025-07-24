@@ -23,6 +23,9 @@ fn setup(mut commands: Commands) {
             world.loaded_chunks.insert((cx as i32, cy as i32), chunk);
         }
     }
-    // generate_chunk(0, 0);
+    
+    // Mark all chunks as dirty so they get rendered on the first frame
+    world.mark_all_chunks_dirty();
+    
     commands.insert_resource(world);
 }

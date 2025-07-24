@@ -12,6 +12,12 @@ pub(crate) const VOXEL_SIZE: f32 = 8.0;
 #[derive(Component)]
 pub struct Voxel;
 
+#[derive(Component)]
+pub struct ChunkMesh {
+    pub chunk_x: i32,
+    pub chunk_y: i32,
+}
+
 pub struct MeshRenderer;
 
 struct DualContourer;
@@ -19,82 +25,136 @@ struct DualContourer;
 impl MeshRenderer {
     pub fn render_mesh(
         mut commands: Commands,
-        world: Res<VoxelWorld>,
-        existing_voxels: Query<Entity, With<Voxel>>,
+        mut world: ResMut<VoxelWorld>,
+        existing_chunks: Query<(Entity, &ChunkMesh)>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<ColorMaterial>>,
     ) {
-        // Clean up existing entities
-        for entity in existing_voxels.iter() {
-            commands.entity(entity).despawn();
+        // Get all dirty chunks
+        let dirty_chunks = world.get_dirty_chunks();
+        
+        if dirty_chunks.is_empty() {
+            return; // Nothing to update
         }
 
-        // Create separate meshes for different material types
-        for &material_type in &[VoxelType::Rock, VoxelType::Dirt] {
-            let (vertices, indices) =
-                DualContourer::generate_dual_contour_mesh(&world, material_type);
+        // Statistics tracking
+        println!("=== MESH GENERATION STATISTICS ===");
+        println!("Dirty chunks to process: {}", dirty_chunks.len());
+        let start_time = std::time::Instant::now();
 
-            if !vertices.is_empty() && !indices.is_empty() {
-                // Create filled mesh
-                let mut filled_mesh = Mesh::new(
-                    PrimitiveTopology::TriangleList,
-                    RenderAssetUsages::RENDER_WORLD,
-                );
-
-                filled_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices.clone());
-
-                // Generate normals (all facing forward for 2D)
-                let normals: Vec<[f32; 3]> = (0..vertices.len()).map(|_| [0.0, 0.0, 1.0]).collect();
-                filled_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
-
-                filled_mesh.insert_indices(Indices::U32(indices.clone()));
-
-                let fill_color = match material_type {
-                    VoxelType::Air => Color::srgba(0.0, 0.0, 0.0, 0.0), // Transparent
-                    VoxelType::Rock => Color::srgb(0.4, 0.4, 0.4),      // Gray
-                    VoxelType::Dirt => Color::srgb(0.6, 0.4, 0.2),      // Brown
-                                                                         // VoxelType::Sand => Color::srgb(0.9, 0.8, 0.5),      // Sandy yellow
-                                                                         // VoxelType::Water => Color::srgb(0.2, 0.4, 0.8),     // Blue
-                                                                         // VoxelType::Ice => Color::srgb(0.8, 0.9, 1.0),       // Light blue-white
-                                                                         // VoxelType::Lava => Color::srgb(1.0, 0.3, 0.0),      // Bright orange-red
-                                                                         // VoxelType::DeepRock => Color::srgb(0.2, 0.2, 0.3),  // Dark gray-blue
-                                                                         // VoxelType::Ore => Color::srgb(0.6, 0.5, 0.2),       // Metallic bronze
-                                                                         // VoxelType::Crystal => Color::srgb(0.8, 0.2, 0.9),   // Bright purple
-                                                                         // VoxelType::Obsidian => Color::srgb(0.1, 0.1, 0.1),  // Very dark gray/black
-                                                                         // VoxelType::Grass => Color::srgb(0.3, 0.7, 0.2),     // Green
-                };
-
-                // Spawn filled mesh
-                commands.spawn((
-                    Mesh2d(meshes.add(filled_mesh)),
-                    MeshMaterial2d(materials.add(ColorMaterial::from(fill_color))),
-                    Transform::default(),
-                    Voxel,
-                ));
-
-                // Create wireframe mesh
-                let wireframe_indices = Self::generate_wireframe_indices(&indices);
-
-                if !wireframe_indices.is_empty() {
-                    let mut wireframe_mesh =
-                        Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::RENDER_WORLD);
-
-                    wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-                    wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-                    wireframe_mesh.insert_indices(Indices::U32(wireframe_indices));
-
-                    // Spawn wireframe mesh
-                    commands.spawn((
-                        Mesh2d(meshes.add(wireframe_mesh)),
-                        MeshMaterial2d(
-                            materials.add(ColorMaterial::from(Color::srgb(1.0, 1.0, 1.0))),
-                        ),
-                        Transform::from_xyz(0.0, 0.0, 0.1), // Slightly in front
-                        Voxel,
-                    ));
-                }
+        // Despawn entities only for dirty chunks
+        let mut despawned_entities = 0;
+        for (entity, chunk_mesh) in existing_chunks.iter() {
+            if dirty_chunks.contains(&(chunk_mesh.chunk_x, chunk_mesh.chunk_y)) {
+                commands.entity(entity).despawn();
+                despawned_entities += 1;
             }
         }
+        println!("Despawned {} existing entities", despawned_entities);
+
+        // Statistics for mesh generation
+        let mut total_vertices = 0;
+        let mut total_indices = 0;
+        let mut spawned_entities = 0;
+        let mut processed_material_types = 0;
+
+        // Regenerate meshes for dirty chunks only
+        for &(chunk_x, chunk_y) in &dirty_chunks {
+            println!("Processing chunk ({}, {})", chunk_x, chunk_y);
+            
+            for &material_type in &[VoxelType::Rock, VoxelType::Dirt] {
+                let chunk_start_time = std::time::Instant::now();
+                let (vertices, indices) =
+                    DualContourer::generate_chunk_mesh(&world, chunk_x, chunk_y, material_type);
+                let generation_time = chunk_start_time.elapsed();
+
+                if !vertices.is_empty() && !indices.is_empty() {
+                    println!("  {}: {} vertices, {} indices ({}ms)", 
+                            match material_type {
+                                VoxelType::Rock => "Rock",
+                                VoxelType::Dirt => "Dirt", 
+                                VoxelType::Air => "Air",
+                            }, vertices.len(), indices.len(), 
+                            generation_time.as_millis());
+                    
+                    total_vertices += vertices.len();
+                    total_indices += indices.len();
+                    processed_material_types += 1;
+                    // Create filled mesh
+                    let mut filled_mesh = Mesh::new(
+                        PrimitiveTopology::TriangleList,
+                        RenderAssetUsages::RENDER_WORLD,
+                    );
+
+                    filled_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices.clone());
+
+                    // Generate normals (all facing forward for 2D)
+                    let normals: Vec<[f32; 3]> = (0..vertices.len()).map(|_| [0.0, 0.0, 1.0]).collect();
+                    filled_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
+
+                    filled_mesh.insert_indices(Indices::U32(indices.clone()));
+
+                    let fill_color = match material_type {
+                        VoxelType::Air => Color::srgba(0.0, 0.0, 0.0, 0.0), // Transparent
+                        VoxelType::Rock => Color::srgb(0.4, 0.4, 0.4),      // Gray
+                        VoxelType::Dirt => Color::srgb(0.6, 0.4, 0.2),      // Brown
+                    };
+
+                    // Spawn filled mesh
+                    commands.spawn((
+                        Mesh2d(meshes.add(filled_mesh)),
+                        MeshMaterial2d(materials.add(ColorMaterial::from(fill_color))),
+                        Transform::default(),
+                        Voxel,
+                        ChunkMesh {
+                            chunk_x,
+                            chunk_y,
+                        },
+                    ));
+                    spawned_entities += 1;
+
+                    // Create wireframe mesh
+                    let wireframe_indices = Self::generate_wireframe_indices(&indices);
+
+                    if !wireframe_indices.is_empty() {
+                        let mut wireframe_mesh =
+                            Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::RENDER_WORLD);
+
+                        wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
+                        wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+                        wireframe_mesh.insert_indices(Indices::U32(wireframe_indices));
+
+                        // Spawn wireframe mesh
+                        commands.spawn((
+                            Mesh2d(meshes.add(wireframe_mesh)),
+                            MeshMaterial2d(
+                                materials.add(ColorMaterial::from(Color::srgb(1.0, 1.0, 1.0))),
+                            ),
+                            Transform::from_xyz(0.0, 0.0, 0.1), // Slightly in front
+                            Voxel,
+                            ChunkMesh {
+                                chunk_x,
+                                chunk_y,
+                            },
+                        ));
+                        spawned_entities += 1;
+                    }
+                }
+            }
+            
+            // Mark chunk as clean after processing
+            world.mark_chunk_clean(chunk_x, chunk_y);
+        }
+        
+        // Print final statistics
+        let total_time = start_time.elapsed();
+        println!("=== SUMMARY ===");
+        println!("Total time: {}ms", total_time.as_millis());
+        println!("Processed {} material types across {} chunks", processed_material_types, dirty_chunks.len());
+        println!("Total vertices: {}, Total indices: {}", total_vertices, total_indices);
+        println!("Spawned {} new entities, Despawned {} old entities", spawned_entities, despawned_entities);
+        println!("Average vertices per chunk: {:.1}", if dirty_chunks.len() > 0 { total_vertices as f32 / dirty_chunks.len() as f32 } else { 0.0 });
+        println!("=====================================");
     }
 
     fn generate_wireframe_indices(triangle_indices: &[u32]) -> Vec<u32> {
@@ -117,75 +177,99 @@ impl MeshRenderer {
 }
 
 impl DualContourer {
-    fn generate_dual_contour_mesh(
+    fn generate_chunk_mesh(
         world: &VoxelWorld,
+        chunk_x: i32,
+        chunk_y: i32,
         target_type: VoxelType,
     ) -> (Vec<[f32; 3]>, Vec<u32>) {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
         let chunk_size = VoxelWorld::chunk_size() as i32;
 
-        // Collect all chunk positions to determine the bounds
-        let chunk_positions: Vec<(i32, i32)> =
-            world.get_loaded_chunks().map(|(&pos, _)| pos).collect();
-
-        if chunk_positions.is_empty() {
+        // Check if chunk is loaded
+        if !world.is_chunk_loaded(chunk_x, chunk_y) {
             return (vertices, indices);
         }
 
-        // Find the bounds of all loaded chunks
-        let min_chunk_x = chunk_positions.iter().map(|(x, _)| *x).min().unwrap();
-        let max_chunk_x = chunk_positions.iter().map(|(x, _)| *x).max().unwrap();
-        let min_chunk_y = chunk_positions.iter().map(|(_, y)| *y).min().unwrap();
-        let max_chunk_y = chunk_positions.iter().map(|(_, y)| *y).max().unwrap();
+        // Calculate world bounds for this specific chunk
+        let world_min_x = chunk_x * chunk_size;
+        let world_max_x = (chunk_x + 1) * chunk_size;
+        let world_min_y = chunk_y * chunk_size;
+        let world_max_y = (chunk_y + 1) * chunk_size;
 
-        // Calculate world bounds
-        let world_min_x = min_chunk_x * chunk_size;
-        let world_max_x = (max_chunk_x + 1) * chunk_size;
-        let world_min_y = min_chunk_y * chunk_size;
-        let world_max_y = (max_chunk_y + 1) * chunk_size;
+        // Statistics tracking
+        let mut cells_processed = 0;
+        let mut cells_skipped = 0;
+        let mut quads_for_greedy = 0;
+        let mut complex_meshes_count = 0;
+        let mut voxel_accesses = 0;
 
-        // First pass: Generate dual contour mesh data
+        // Generate dual contour mesh data for this chunk
         let mut mesh_quads = Vec::new();
         let mut complex_meshes = Vec::new();
 
-        for world_y in world_min_y..(world_max_y - 1) {
-            for world_x in world_min_x..(world_max_x - 1) {
-                // Only create cells where we can sample all 4 corners
-                if Self::can_sample_cell(world, world_x, world_y) {
-                    let cell = Self::get_cell_configuration(world, world_x, world_y, target_type);
+        // Generate cells for this chunk, including boundary cells for seamless connection
+        // We'll include boundaries but use chunk ownership rules to avoid duplicates
+        for world_y in world_min_y..world_max_y {
+            for world_x in world_min_x..world_max_x {
+                // Check if this cell "belongs" to this chunk to avoid duplicates
+                // A cell belongs to the chunk containing its bottom-left corner
+                let cell_chunk_x = world_x.div_euclid(chunk_size);
+                let cell_chunk_y = world_y.div_euclid(chunk_size);
+                
+                // Only process cells that belong to this chunk
+                if cell_chunk_x == chunk_x && cell_chunk_y == chunk_y {
+                    // Only create cells where we can sample all 4 corners
+                    if Self::can_sample_cell(world, world_x, world_y) {
+                        voxel_accesses += 4; // We access 4 corners for each cell
+                        let cell = Self::get_cell_configuration(world, world_x, world_y, target_type);
+                        cells_processed += 1;
 
-                    if let Some(cell_mesh) =
-                        Self::generate_cell_mesh(cell, world_x as f32, world_y as f32)
-                    {
-                        // Check if this is a simple full quad that can be greedy meshed
-                        if GreedyMeshHandler::is_full_quad_mesh(
-                            &cell_mesh,
-                            world_x as f32,
-                            world_y as f32,
-                        ) {
-                            mesh_quads.push((world_x, world_y));
-                        } else {
-                            // Complex shapes go directly into the final mesh
-                            complex_meshes.push(cell_mesh);
+                        if let Some(cell_mesh) =
+                            Self::generate_cell_mesh(cell, world_x as f32, world_y as f32)
+                        {
+                            // Check if this is a simple full quad that can be greedy meshed
+                            if GreedyMeshHandler::is_full_quad_mesh(
+                                &cell_mesh,
+                                world_x as f32,
+                                world_y as f32,
+                            ) {
+                                mesh_quads.push((world_x, world_y));
+                                quads_for_greedy += 1;
+                            } else {
+                                // Complex shapes go directly into the final mesh
+                                complex_meshes.push(cell_mesh);
+                                complex_meshes_count += 1;
+                            }
                         }
+                    } else {
+                        cells_skipped += 1;
                     }
                 }
             }
         }
 
-        // Second pass: Apply greedy meshing to full quads
+        // Apply greedy meshing to full quads within this chunk
         let greedy_quads = GreedyMeshHandler::greedy_mesh_quads(
             &mesh_quads,
             world_min_x,
             world_min_y,
-            world_max_x,
+            world_max_x, // Include the full range for seamless boundaries
             world_max_y,
         );
 
-        // Debug information
-        // println!("Greedy meshing: {} individual quads -> {} merged quads + {} complex meshes",
-        //          mesh_quads.len(), greedy_quads.len(), complex_meshes.len());
+        // Print detailed statistics for this chunk
+        let material_name = match target_type {
+            VoxelType::Rock => "Rock",
+            VoxelType::Dirt => "Dirt",
+            VoxelType::Air => "Air",
+        };
+        println!("    [{}] Chunk ({},{}) stats:", material_name, chunk_x, chunk_y);
+        println!("      Cells: {} processed, {} skipped", cells_processed, cells_skipped);
+        println!("      Voxel accesses: {}", voxel_accesses);
+        println!("      Meshes: {} quads for greedy → {} greedy quads, {} complex", 
+                quads_for_greedy, greedy_quads.len(), complex_meshes_count);
 
         // Add greedy meshed quads to the final mesh
         for quad in greedy_quads {
