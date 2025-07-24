@@ -1,7 +1,7 @@
 pub mod chunk;
 pub mod chunk_world;
-pub mod greedy_mesh;
 pub mod dual_contourer;
+pub mod greedy_mesh;
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -22,7 +22,7 @@ pub struct Voxel;
 pub enum VoxelType {
     Air,
     Rock,
-    Dirt
+    Dirt,
 }
 
 #[derive(Component)]
@@ -43,7 +43,9 @@ impl MeshRenderer {
         existing_chunks: Query<(Entity, &ChunkMesh)>,
     ) {
         let dirty_chunks = world.get_dirty_chunks();
-        if dirty_chunks.is_empty() { return; }
+        if dirty_chunks.is_empty() {
+            return;
+        }
 
         // Despawn dirty chunks
         for (entity, chunk_mesh) in existing_chunks.iter() {
@@ -55,16 +57,18 @@ impl MeshRenderer {
         // Regenerate meshes for dirty chunks only
         for &(chunk_x, chunk_y) in &dirty_chunks {
             for &material_type in &[VoxelType::Rock, VoxelType::Dirt] {
+                if !world.is_chunk_loaded(chunk_x, chunk_y) {
+                    continue;
+                }
 
-                if !world.is_chunk_loaded(chunk_x, chunk_y) { continue; }
-                
-                let (vertices, indices) = DualContourer::generate_chunk_mesh(&world, chunk_x, chunk_y, material_type);
+                let (vertices, indices) =
+                    DualContourer::generate_chunk_mesh(&world, chunk_x, chunk_y, material_type);
                 if !vertices.is_empty() && !indices.is_empty() {
                     let mut filled_mesh = Mesh::new(
                         PrimitiveTopology::TriangleList,
                         RenderAssetUsages::RENDER_WORLD,
                     );
-                    
+
                     // Generate normals (all facing forward for 2D)
                     let normals = Self::generate_mesh_normals(&vertices);
                     filled_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals.clone());
@@ -90,8 +94,14 @@ impl MeshRenderer {
                     // Create wireframe mesh
                     if WIREFRAME_MODE {
                         Self::spawn_wireframe_mesh(
-                            &mut commands, &mut meshes, &mut materials,
-                            vertices, normals, indices, chunk_x, chunk_y,
+                            &mut commands,
+                            &mut meshes,
+                            &mut materials,
+                            vertices,
+                            normals,
+                            indices,
+                            chunk_x,
+                            chunk_y,
                         );
                     }
                 }
@@ -118,20 +128,19 @@ impl MeshRenderer {
         chunk_y: i32,
     ) {
         let wireframe_indices = Self::generate_wireframe_indices(&indices);
-        
+
         if !wireframe_indices.is_empty() {
-            let mut wireframe_mesh = Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::RENDER_WORLD);
-            
+            let mut wireframe_mesh =
+                Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::RENDER_WORLD);
+
             wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
             wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
             wireframe_mesh.insert_indices(Indices::U32(wireframe_indices));
-            
+
             // Spawn wireframe mesh
             commands.spawn((
                 Mesh2d(meshes.add(wireframe_mesh)),
-                MeshMaterial2d(
-                    materials.add(ColorMaterial::from(Color::srgb(1.0, 1.0, 1.0))),
-                ),
+                MeshMaterial2d(materials.add(ColorMaterial::from(Color::srgb(1.0, 1.0, 1.0)))),
                 Transform::from_xyz(0.0, 0.0, 0.1), // Slightly in front
                 Voxel,
                 ChunkMesh { chunk_x, chunk_y },

@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-use crate::planet::mesh::{chunk_world::ChunkWorld, greedy_mesh::GreedyMeshHandler, VoxelType, VOXEL_SIZE};
+use crate::planet::mesh::{
+    VOXEL_SIZE, VoxelType, chunk_world::ChunkWorld, greedy_mesh::GreedyMeshHandler,
+};
 
 /// Dual contouring algorithm for generating meshes from voxel data
 pub struct DualContourer;
@@ -51,7 +53,8 @@ impl DualContourer {
                 if cell_chunk_x == chunk_x && cell_chunk_y == chunk_y {
                     // Only create cells where we can sample all 4 corners
                     if Self::can_sample_cell(world, world_x, world_y) {
-                        let cell = Self::get_cell_configuration(world, world_x, world_y, target_type);
+                        let cell =
+                            Self::get_cell_configuration(world, world_x, world_y, target_type);
 
                         if let Some(cell_mesh) =
                             Self::generate_cell_mesh(cell, world_x as f32, world_y as f32)

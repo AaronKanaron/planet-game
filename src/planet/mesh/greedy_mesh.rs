@@ -1,5 +1,5 @@
+use crate::planet::mesh::{VOXEL_SIZE, dual_contourer::CellMesh};
 use bevy::prelude::*;
-use crate::planet::mesh::{dual_contourer::CellMesh, VOXEL_SIZE};
 
 #[derive(Debug, Clone)]
 pub struct GreedyQuad {
@@ -118,7 +118,11 @@ impl GreedyMeshHandler {
     }
 
     /// Add a greedy quad to the mesh, aka. a bigger rectangle.
-    pub fn add_quad_to_mesh(vertices: &mut Vec<[f32; 3]>, indices: &mut Vec<u32>, quad: GreedyQuad) {
+    pub fn add_quad_to_mesh(
+        vertices: &mut Vec<[f32; 3]>,
+        indices: &mut Vec<u32>,
+        quad: GreedyQuad,
+    ) {
         let vertex_offset = vertices.len() as u32;
 
         // Add vertices for the rectangle

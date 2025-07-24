@@ -1,8 +1,8 @@
+use crate::planet::mesh::VoxelType;
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
-use crate::planet::mesh::VoxelType;
 
-pub const CHUNK_SIZE: usize = 16; 
+pub const CHUNK_SIZE: usize = 16;
 
 pub struct Chunk {
     voxels: Vec<VoxelType>,
@@ -28,7 +28,7 @@ impl Chunk {
                 // Create smoother transitions with multiple noise layers
                 let detail_noise = noise.get([world_x / 20.0, world_y / 20.0]) * 0.3;
                 let combined_height = terrain_height + detail_noise;
-                
+
                 // Smoother thresholds that should create gradual transitions
                 let voxel = if combined_height < -0.3 {
                     VoxelType::Air
@@ -38,7 +38,8 @@ impl Chunk {
                         VoxelType::Dirt
                     } else {
                         // Mix dirt and rock in transition zone
-                        let dirt_noise = noise.get([world_x / 15.0 + 1000.0, world_y / 15.0 + 1000.0]);
+                        let dirt_noise =
+                            noise.get([world_x / 15.0 + 1000.0, world_y / 15.0 + 1000.0]);
                         if dirt_noise > 0.2 {
                             VoxelType::Rock
                         } else {
@@ -48,7 +49,7 @@ impl Chunk {
                 } else {
                     VoxelType::Rock
                 };
-                
+
                 voxels.push(voxel);
             }
         }
@@ -62,7 +63,7 @@ impl Chunk {
     /// Sample the terrain height using Perlin noise
     fn sample_terrain_height(world_x: f64, world_y: f64, noise: &Perlin) -> f64 {
         let base_scale = 50.0;
-        
+
         // Single noise sample - should be in range [-1, 1]
         let height = noise.get([world_x / base_scale, world_y / base_scale]);
 
@@ -77,7 +78,9 @@ impl Chunk {
             self.voxels[idx] = vtype;
 
             let is_changed = old_voxel != vtype;
-            if is_changed { self.dirty = true; }
+            if is_changed {
+                self.dirty = true;
+            }
         }
     }
 

@@ -1,20 +1,23 @@
+use crate::planet::mesh::{
+    VoxelType,
+    chunk::{CHUNK_SIZE, Chunk},
+};
 use bevy::{platform::collections::HashMap, prelude::*};
 use noise::Perlin;
-use crate::planet::mesh::{chunk::{Chunk, CHUNK_SIZE}, VoxelType};
 
 #[derive(Resource)]
 pub struct ChunkWorld {
     /// Loaded chunks by their world position
     pub loaded_chunks: HashMap<(i32, i32), Chunk>,
 
-    pub noise: Perlin
+    pub noise: Perlin,
 }
 
 impl ChunkWorld {
     pub fn new() -> Self {
         Self {
             loaded_chunks: HashMap::new(),
-            noise: Perlin::new(42)
+            noise: Perlin::new(42),
         }
     }
 

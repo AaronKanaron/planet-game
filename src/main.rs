@@ -4,9 +4,10 @@ use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::input::ButtonInput;
 use bevy::window::WindowPlugin;
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
+
 use crate::planet::mesh::chunk_world::ChunkWorld;
-use crate::planet::mesh::VoxelType;
-use crate::planet::{mesh::VOXEL_SIZE, plugin::PlanetPlugin};
+use crate::planet::mesh::{VOXEL_SIZE, VoxelType};
+use crate::planet::plugin::PlanetPlugin;
 
 fn main() {
     App::new()
@@ -20,9 +21,7 @@ fn main() {
         }))
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .add_plugins(LogDiagnosticsPlugin::default())
-
         .add_plugins(PlanetPlugin)
-
         .add_systems(Startup, setup)
         .add_systems(Update, handle_input)
         .run();
@@ -36,7 +35,7 @@ fn setup(mut commands: Commands) {
             ..Default::default()
         },
         Transform::default(),
-        GlobalTransform::default()
+        GlobalTransform::default(),
     ));
 }
 
@@ -70,18 +69,10 @@ fn handle_input(
         if world_x >= 0 && world_y >= 0 {
             world.set_voxel(world_x as i32, world_y as i32, VoxelType::Air);
             world.set_voxel((world_x + 1) as i32, (world_y) as i32, VoxelType::Air);
-            world.set_voxel(
-                (world_x + 1) as i32,
-                (world_y + 1) as i32,
-                VoxelType::Air,
-            );
+            world.set_voxel((world_x + 1) as i32, (world_y + 1) as i32, VoxelType::Air);
             world.set_voxel((world_x) as i32, (world_y + 1) as i32, VoxelType::Air);
             world.set_voxel((world_x - 1) as i32, (world_y) as i32, VoxelType::Air);
-            world.set_voxel(
-                (world_x - 1) as i32,
-                (world_y - 1) as i32,
-                VoxelType::Air,
-            );
+            world.set_voxel((world_x - 1) as i32, (world_y - 1) as i32, VoxelType::Air);
         }
     }
 }
