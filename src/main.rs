@@ -1,16 +1,12 @@
+mod planet;
+
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::input::ButtonInput;
 use bevy::window::WindowPlugin;
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
-
-use crate::planet::mesh::VOXEL_SIZE;
-use crate::planet::plugin::PlanetPlugin;
-use crate::planet::startup::{VoxelType, VoxelWorld};
-
-mod planet;
-
-
-
+use crate::planet::mesh::chunk_world::ChunkWorld;
+use crate::planet::mesh::VoxelType;
+use crate::planet::{mesh::VOXEL_SIZE, plugin::PlanetPlugin};
 
 fn main() {
     App::new()
@@ -44,12 +40,8 @@ fn setup(mut commands: Commands) {
     ));
 }
 
-
-
-
-
 fn handle_input(
-    mut world: ResMut<VoxelWorld>,
+    mut world: ResMut<ChunkWorld>,
     mouse_input: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
@@ -90,17 +82,6 @@ fn handle_input(
                 (world_y - 1) as i32,
                 VoxelType::Air,
             );
-            // world.set_voxel((world_x) as i32, (world_y - 1) as i32, VoxelType::Air);
-            // world.set_voxel(
-            //     (world_x + 1) as i32,
-            //     (world_y - 1) as i32,
-            //     VoxelType::Air,
-            // );
-            // world.set_voxel(
-            //     (world_x - 1) as i32,
-            //     (world_y + 1) as i32,
-            //     VoxelType::Air,
-            // );
         }
     }
 }

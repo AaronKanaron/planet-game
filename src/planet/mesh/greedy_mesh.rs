@@ -1,6 +1,5 @@
 use bevy::prelude::*;
-
-use crate::planet::mesh::{CellMesh, VOXEL_SIZE};
+use crate::planet::mesh::{dual_contourer::CellMesh, VOXEL_SIZE};
 
 #[derive(Debug, Clone)]
 pub struct GreedyQuad {
