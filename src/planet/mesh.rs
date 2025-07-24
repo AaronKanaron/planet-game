@@ -13,7 +13,7 @@ use crate::planet::mesh::{chunk_world::ChunkWorld, dual_contourer::DualContourer
 
 /// Voxel size in world units
 pub const VOXEL_SIZE: f32 = 6.0;
-const WIREFRAME_MODE: bool = false;
+const WIREFRAME_MODE: bool = true;
 
 #[derive(Component)]
 pub struct Voxel;

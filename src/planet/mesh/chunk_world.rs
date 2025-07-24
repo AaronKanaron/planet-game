@@ -69,6 +69,7 @@ impl ChunkWorld {
                 }
             }
         } else {
+            // This means that the vvoxel that is being set is in a chunk that does not exist yet.
             // Optionally generate and insert chunk
         }
     }
@@ -77,12 +78,7 @@ impl ChunkWorld {
         self.loaded_chunks.contains_key(&(chunk_x, chunk_y))
     }
 
-    pub fn mark_chunk_clean(&mut self, chunk_x: i32, chunk_y: i32) {
-        if let Some(chunk) = self.loaded_chunks.get_mut(&(chunk_x, chunk_y)) {
-            chunk.mark_clean();
-        }
-    }
-
+    
     pub fn get_dirty_chunks(&self) -> Vec<(i32, i32)> {
         self.loaded_chunks
             .iter()
@@ -96,16 +92,23 @@ impl ChunkWorld {
             chunk.mark_dirty();
         }
     }
-
-    pub fn chunk_size() -> usize {
-        CHUNK_SIZE
-    }
-
+    
     pub fn mark_chunk_dirty(&mut self, chunk_x: i32, chunk_y: i32) {
         if let Some(chunk) = self.loaded_chunks.get_mut(&(chunk_x, chunk_y)) {
             chunk.mark_dirty();
         }
     }
+
+    pub fn mark_chunk_clean(&mut self, chunk_x: i32, chunk_y: i32) {
+        if let Some(chunk) = self.loaded_chunks.get_mut(&(chunk_x, chunk_y)) {
+            chunk.mark_clean();
+        }
+    }
+    
+    pub fn chunk_size() -> usize {
+        CHUNK_SIZE
+    }
+
 
     /// Load chunks within the given culling box
     pub fn load_chunks_in_box(&mut self, culling_box: &ChunkCullingBox) -> Vec<(i32, i32)> {

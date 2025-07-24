@@ -11,12 +11,8 @@ pub fn chunk_culling_system(
         return;
     }
 
-    // Only process when culling box changes or we need to check chunks
     let should_process = culling_box.is_changed() || chunk_world.loaded_chunk_count() == 0;
-    
-    if !should_process {
-        return;
-    }
+    if !should_process { return; }
 
     // Load chunks within the bounding box
     let loaded_chunks = chunk_world.load_chunks_in_box(&culling_box);
@@ -62,7 +58,6 @@ pub fn draw_culling_box_gizmo(
     let min = culling_box.center - culling_box.half_extents;
     let max = culling_box.center + culling_box.half_extents;
 
-    // Draw the bounding box outline
     gizmos.rect_2d(
         culling_box.center,
         culling_box.half_extents * 2.0, // size
@@ -94,7 +89,6 @@ pub fn draw_culling_box_gizmo(
     );
 }
 
-/// System that handles input for moving and resizing the culling box
 pub fn culling_box_input_system(
     mut culling_box: ResMut<ChunkCullingBox>,
     keyboard_input: Res<ButtonInput<KeyCode>>,

@@ -9,6 +9,9 @@ pub struct Chunk {
 
     /// Whether this chunk needs to be re-meshed
     dirty: bool,
+
+    /// Whether this chunk has been modified apart from the initial generation
+    modified: bool,
 }
 
 impl Chunk {
@@ -57,6 +60,7 @@ impl Chunk {
         Chunk {
             voxels,
             dirty: true,
+            modified: false,
         }
     }
 
@@ -80,6 +84,7 @@ impl Chunk {
             let is_changed = old_voxel != vtype;
             if is_changed {
                 self.dirty = true;
+                self.modified = true;
             }
         }
     }
