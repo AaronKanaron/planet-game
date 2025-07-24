@@ -63,16 +63,20 @@ fn handle_input(
     };
 
     if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-        let world_x = ((world_pos.x + 400.0) / VOXEL_SIZE) as isize;
-        let world_y = ((300.0 - world_pos.y) / VOXEL_SIZE) as isize;
+        let world_x = (world_pos.x / VOXEL_SIZE) as isize;
+        let world_y = (world_pos.y / VOXEL_SIZE) as isize;
 
-        if world_x >= 0 && world_y >= 0 {
-            world.set_voxel(world_x as i32, world_y as i32, VoxelType::Air);
-            world.set_voxel((world_x + 1) as i32, (world_y) as i32, VoxelType::Air);
-            world.set_voxel((world_x + 1) as i32, (world_y + 1) as i32, VoxelType::Air);
-            world.set_voxel((world_x) as i32, (world_y + 1) as i32, VoxelType::Air);
-            world.set_voxel((world_x - 1) as i32, (world_y) as i32, VoxelType::Air);
-            world.set_voxel((world_x - 1) as i32, (world_y - 1) as i32, VoxelType::Air);
-        }
+        // Remove voxels in all quadrants
+        world.set_voxel(world_x as i32, world_y as i32, VoxelType::Air);
+        world.set_voxel((world_x + 1) as i32, (world_y) as i32, VoxelType::Air);
+        world.set_voxel((world_x + 1) as i32, (world_y + 1) as i32, VoxelType::Air);
+        world.set_voxel((world_x) as i32, (world_y + 1) as i32, VoxelType::Air);
+        world.set_voxel((world_x - 1) as i32, (world_y) as i32, VoxelType::Air);
+        world.set_voxel((world_x - 1) as i32, (world_y - 1) as i32, VoxelType::Air);
+        world.set_voxel((world_x) as i32, (world_y - 1) as i32, VoxelType::Air);
+        world.set_voxel((world_x + 1) as i32, (world_y - 1) as i32, VoxelType::Air);
+        world.set_voxel((world_x - 1) as i32, (world_y + 1) as i32, VoxelType::Air);
+        
+
     }
 }
