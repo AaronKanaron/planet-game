@@ -1,5 +1,5 @@
 <div align="center" id="top"> 
-  <img src="./resources/app.png" alt="Planet Game" />
+  <img src="./resources/app2.png" alt="Planet Game" />
 
   &#xa0;
 

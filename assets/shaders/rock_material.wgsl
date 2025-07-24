@@ -1,53 +1,38 @@
 #import bevy_sprite::mesh2d_vertex_output::VertexOutput
-
 struct RockMaterial {
     color: vec4<f32>,
     mesh_size: vec3<f32>,
 }
-
 @group(2) @binding(0) var<uniform> material: RockMaterial;
 
-// Hash för pseudo-random värde
+// Hash function for random gradient
 fn hash(p: vec2<f32>) -> f32 {
-    let p3 = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);
-    let p4 = p3 + dot(p3, p3.yzx + 33.33);
-    return fract((p4.x + p4.y) * p4.z);
+    return fract(sin(dot(p, vec2<f32>(127.1, 311.7))) * 43758.5453);
 }
 
-// Value noise
-fn noise(p: vec2<f32>) -> f32 {
+// 2D value noise with smooth (Perlin-like) interpolation
+fn noise2d(p: vec2<f32>) -> f32 {
     let i = floor(p);
     let f = fract(p);
-
     let a = hash(i);
     let b = hash(i + vec2<f32>(1.0, 0.0));
     let c = hash(i + vec2<f32>(0.0, 1.0));
     let d = hash(i + vec2<f32>(1.0, 1.0));
-
     let u = f * f * (3.0 - 2.0 * f);
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
-// Fractal Brownian Motion
+// Fractal Brownian Motion (adds layered noise at multiple scales)
 fn fbm(p: vec2<f32>) -> f32 {
     var value = 0.0;
     var amplitude = 0.5;
     var frequency = 1.0;
-    for (var i = 0; i < 5; i = i + 1) {
-        value += amplitude * noise(p * frequency);
-        frequency *= 2.0;
-        amplitude *= 0.5;
+    for (var i = 0u; i < 5u; i = i + 1u) {
+        value = value + amplitude * noise2d(p * frequency);
+        frequency = frequency * 2.0;
+        amplitude = amplitude * 0.5;
     }
     return value;
-}
-
-// Distortion function (turbulence-style)
-fn distort(p: vec2<f32>) -> vec2<f32> {
-    let q = vec2<f32>(
-        fbm(p + vec2<f32>(0.0, 0.0)),
-        fbm(p + vec2<f32>(5.2, 1.3))
-    );
-    return p + 0.5 * q;
 }
 
 @fragment
@@ -55,19 +40,24 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     let uv = mesh.uv;
     let world_pos = mesh.world_position.xy;
 
-    // Kombinera UV med world-pos för variation
-    let base_coords = (uv + world_pos * 0.05) * material.mesh_size.xy / max(material.mesh_size.x, material.mesh_size.y);
+    // Normalize to avoid stretching based on mesh size
+    let normalized_uv = uv * material.mesh_size.xy / max(material.mesh_size.x, material.mesh_size.y);
 
-    // Distortion för att skapa organiska mönster
-    let distorted = distort(base_coords * 2.0);
+    // Combine UV and world position for seamless, varied noise
+    let pos = normalized_uv * 10.0 + world_pos * 0.01;
 
-    // Färgvärde via fbm
-    let n = fbm(distorted * 1.5);
+    // Fractal noise for the main rock pattern
+    let n = fbm(pos);
 
-    // Tona mellan två stenspecifika färger
-    let rock_dark = vec3<f32>(0.15, 0.13, 0.12);
-    let rock_light = vec3<f32>(0.6, 0.55, 0.5);
-    let color = mix(rock_dark, rock_light, n);
+    // Hard cracks/highlights based on noise thresholding
+    let cracks = step(0.6, n);
 
-    return vec4<f32>(color, 1.0);
+    // Rock base color and variations
+    let base_color = vec3<f32>(0.1, 0.1, 0.1);
+    let color_variation = 0.5 * fbm(pos * 2.0);
+
+    // Mix highlight (crack) color and add noise-based shading
+    let final_color = mix(base_color, vec3<f32>(0.2, 0.1, 0.05), cracks) + color_variation;
+
+    return vec4<f32>(final_color, 1.0);
 }
