@@ -1,4 +1,4 @@
-use crate::planet::mesh::{VOXEL_SIZE, dual_contourer::CellMesh};
+use crate::planet::meshing::{mesh_renderer::VOXEL_SIZE, dual_contourer::CellMesh};
 use bevy::prelude::*;
 
 #[derive(Debug, Clone)]

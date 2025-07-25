@@ -1,8 +1,8 @@
-use crate::planet::mesh::{
-    VoxelType,
-    chunk::{CHUNK_SIZE, Chunk},
-};
 use crate::planet::culling::ChunkCullingBox;
+use crate::planet::world::{
+    chunk::{CHUNK_SIZE, Chunk},
+    voxel::VoxelType,
+};
 use bevy::{platform::collections::HashMap, prelude::*};
 use noise::Perlin;
 
@@ -78,7 +78,6 @@ impl World {
         self.loaded_chunks.contains_key(&(chunk_x, chunk_y))
     }
 
-    
     pub fn get_dirty_chunks(&self) -> Vec<(i32, i32)> {
         self.loaded_chunks
             .iter()
@@ -92,7 +91,7 @@ impl World {
             chunk.mark_dirty();
         }
     }
-    
+
     pub fn mark_chunk_dirty(&mut self, chunk_x: i32, chunk_y: i32) {
         if let Some(chunk) = self.loaded_chunks.get_mut(&(chunk_x, chunk_y)) {
             chunk.mark_dirty();
@@ -104,24 +103,23 @@ impl World {
             chunk.mark_clean();
         }
     }
-    
+
     pub fn chunk_size() -> usize {
         CHUNK_SIZE
     }
 
-
     /// Load chunks within the given culling box
     pub fn load_chunks_in_box(&mut self, culling_box: &ChunkCullingBox) -> Vec<(i32, i32)> {
-        let (min_chunk_x, min_chunk_y, max_chunk_x, max_chunk_y) = 
+        let (min_chunk_x, min_chunk_y, max_chunk_x, max_chunk_y) =
             culling_box.get_chunk_bounds(CHUNK_SIZE);
 
         let mut loaded_chunks = Vec::new();
 
         for chunk_x in min_chunk_x..=max_chunk_x {
             for chunk_y in min_chunk_y..=max_chunk_y {
-                if culling_box.contains_chunk(chunk_x, chunk_y, CHUNK_SIZE) 
-                    && !self.loaded_chunks.contains_key(&(chunk_x, chunk_y)) {
-                    
+                if culling_box.contains_chunk(chunk_x, chunk_y, CHUNK_SIZE)
+                    && !self.loaded_chunks.contains_key(&(chunk_x, chunk_y))
+                {
                     let chunk = Chunk::generate(chunk_x, chunk_y, &self.noise);
                     self.loaded_chunks.insert((chunk_x, chunk_y), chunk);
                     loaded_chunks.push((chunk_x, chunk_y));
@@ -134,7 +132,8 @@ impl World {
 
     /// Unload chunks outside the given culling box
     pub fn unload_chunks_outside_box(&mut self, culling_box: &ChunkCullingBox) -> Vec<(i32, i32)> {
-        let chunks_to_remove: Vec<(i32, i32)> = self.loaded_chunks
+        let chunks_to_remove: Vec<(i32, i32)> = self
+            .loaded_chunks
             .keys()
             .filter(|&&(chunk_x, chunk_y)| {
                 !culling_box.contains_chunk(chunk_x, chunk_y, CHUNK_SIZE)
@@ -146,12 +145,12 @@ impl World {
         for &(chunk_x, chunk_y) in &chunks_to_remove {
             // Mark all adjacent chunks as dirty if they exist
             let neighbors = [
-                (chunk_x - 1, chunk_y),     // left
-                (chunk_x + 1, chunk_y),     // right
-                (chunk_x, chunk_y - 1),     // bottom
-                (chunk_x, chunk_y + 1),     // top
+                (chunk_x - 1, chunk_y), // left
+                (chunk_x + 1, chunk_y), // right
+                (chunk_x, chunk_y - 1), // bottom
+                (chunk_x, chunk_y + 1), // top
             ];
-            
+
             for &(nx, ny) in &neighbors {
                 if self.loaded_chunks.contains_key(&(nx, ny)) {
                     self.mark_chunk_dirty(nx, ny);

@@ -1,30 +1,17 @@
-pub mod chunk;
-pub mod world;
-pub mod dual_contourer;
-pub mod greedy_mesh;
-
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
     render::mesh::{Indices, PrimitiveTopology},
 };
 
-use crate::planet::{mesh::{world::World, dual_contourer::DualContourer}, planet_material::DirtMaterial};
+use crate::planet::{meshing::dual_contourer::DualContourer, planet_material::DirtMaterial, world::{chunk_world::World, voxel::{Voxel, VoxelType}}};
 use crate::planet::planet_material::RockMaterial;
 
 /// Voxel size in world units
 pub const VOXEL_SIZE: f32 = 6.0;
 const WIREFRAME_MODE: bool = false;
 
-#[derive(Component)]
-pub struct Voxel;
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum VoxelType {
-    Air,
-    Rock,
-    Dirt,
-}
 
 #[derive(Component)]
 pub struct ChunkMesh {
@@ -113,9 +100,8 @@ impl MeshRenderer {
                             ));
                         },
                         VoxelType::Dirt => {
-                            // Use regular ColorMaterial for dirt
                             let dirt_material = DirtMaterial {
-                                color: LinearRgba::rgb(0.4, 0.26, 0.19), // Brighter gray for more visible shader effects
+                                color: LinearRgba::rgb(0.4, 0.26, 0.19),
                                 mesh_size,
                             };
                             commands.spawn((
@@ -127,7 +113,6 @@ impl MeshRenderer {
                             ));
                         },
                         VoxelType::Air => {
-                            // Skip air voxels
                             continue;
                         },
                     }

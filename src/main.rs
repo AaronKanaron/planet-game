@@ -1,15 +1,15 @@
-mod planet;
 mod camera;
+mod planet;
 
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::input::ButtonInput;
 use bevy::window::WindowPlugin;
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
-use crate::camera::CameraPlugin;
-use crate::planet::mesh::world::World;
-use crate::planet::mesh::{VOXEL_SIZE, VoxelType};
+// use crate::camera::CameraPlugin;
 use crate::planet::plugin::PlanetPlugin;
+use crate::planet::world::chunk_world::World;
+use crate::planet::{meshing::mesh_renderer::VOXEL_SIZE, world::voxel::VoxelType};
 
 fn main() {
     App::new()

@@ -1,4 +1,4 @@
-use crate::planet::mesh::VoxelType;
+use crate::planet::world::voxel::VoxelType;
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
 

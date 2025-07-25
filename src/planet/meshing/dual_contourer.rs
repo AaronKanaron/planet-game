@@ -1,8 +1,18 @@
 use bevy::prelude::*;
 
-use crate::planet::mesh::{
-    VOXEL_SIZE, VoxelType, world::World, greedy_mesh::GreedyMeshHandler,
+use crate::planet::{
+    meshing::{
+        mesh_renderer::{
+            VOXEL_SIZE
+        },
+        greedy_mesh::GreedyMeshHandler
+    },
+    world::{
+        chunk_world::World,
+        voxel::VoxelType
+    }        
 };
+
 
 /// Dual contouring algorithm for generating meshes from voxel data
 pub struct DualContourer;

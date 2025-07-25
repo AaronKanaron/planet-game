@@ -1,4 +1,5 @@
-use crate::planet::mesh::{MeshRenderer, chunk::Chunk, world::World};
+use crate::planet::meshing::mesh_renderer::MeshRenderer;
+use crate::planet::world::{chunk_world::World, chunk::Chunk};
 use crate::planet::culling::ChunkCullingBox;
 use crate::planet::culling_system::{chunk_culling_system, draw_culling_box_gizmo, culling_box_input_system};
 use crate::planet::debug::{setup_debug_ui, update_debug_info};

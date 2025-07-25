@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::planet::mesh::VOXEL_SIZE;
+use crate::planet::meshing::mesh_renderer::VOXEL_SIZE;
 
 /// Represents a 2D bounding box for chunk culling
 #[derive(Resource)]

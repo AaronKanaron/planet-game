@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::planet::mesh::world::World;
+use crate::planet::world::chunk_world::World;
 use crate::planet::culling::ChunkCullingBox;
 
 #[derive(Component)]
