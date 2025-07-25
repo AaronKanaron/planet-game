@@ -70,17 +70,17 @@ fn handle_input(
     };
 
     if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-        let world_x = (world_pos.x / VOXEL_SIZE) as isize;
-        let world_y = (world_pos.y / VOXEL_SIZE) as isize;
+        // Convert world position to voxel grid coordinates
+        let voxel_x = (world_pos.x / VOXEL_SIZE) as i32;
+        let voxel_y = (world_pos.y / VOXEL_SIZE) as i32;
 
-        world.set_voxel(world_x as i32, world_y as i32, VoxelType::Air);
-        // world.set_voxel((world_x + 1) as i32, (world_y) as i32, VoxelType::Air);
-        // world.set_voxel((world_x + 1) as i32, (world_y + 1) as i32, VoxelType::Air);
-        // world.set_voxel((world_x) as i32, (world_y + 1) as i32, VoxelType::Air);
-        // world.set_voxel((world_x - 1) as i32, (world_y) as i32, VoxelType::Air);
-        // world.set_voxel((world_x - 1) as i32, (world_y - 1) as i32, VoxelType::Air);
-        // world.set_voxel((world_x) as i32, (world_y - 1) as i32, VoxelType::Air);
-        // world.set_voxel((world_x + 1) as i32, (world_y - 1) as i32, VoxelType::Air);
-        // world.set_voxel((world_x - 1) as i32, (world_y + 1) as i32, VoxelType::Air);
+        // Due to dual contouring, the visual mesh at position (x, y) is generated from
+        // the cell configuration of voxels at (x, y), (x+1, y), (x+1, y+1), and (x, y+1).
+        // To properly remove the visual block we're clicking on, we need to set all
+        // 4 corner voxels of that cell to Air.
+        world.set_voxel(voxel_x, voxel_y, VoxelType::Air);
+        world.set_voxel(voxel_x + 1, voxel_y, VoxelType::Air);
+        world.set_voxel(voxel_x + 1, voxel_y + 1, VoxelType::Air);
+        world.set_voxel(voxel_x, voxel_y + 1, VoxelType::Air);
     }
 }

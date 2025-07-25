@@ -86,11 +86,11 @@ impl World {
             .collect()
     }
 
-    pub fn mark_all_chunks_dirty(&mut self) {
-        for chunk in self.loaded_chunks.values_mut() {
-            chunk.mark_dirty();
-        }
-    }
+    // pub fn mark_all_chunks_dirty(&mut self) {
+    //     for chunk in self.loaded_chunks.values_mut() {
+    //         chunk.mark_dirty();
+    //     }
+    // }
 
     pub fn mark_chunk_dirty(&mut self, chunk_x: i32, chunk_y: i32) {
         if let Some(chunk) = self.loaded_chunks.get_mut(&(chunk_x, chunk_y)) {
