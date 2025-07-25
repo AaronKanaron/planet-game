@@ -1,6 +1,8 @@
 use bevy::prelude::*;
-use crate::planet::culling::ChunkCullingBox;
-use crate::planet::world::chunk_world::World;
+use crate::planet::{
+    rendering::culling::ChunkCullingBox,
+    world::chunk_world::World,
+};
 
 /// System that handles chunk loading and unloading based on the culling box
 pub fn chunk_culling_system(

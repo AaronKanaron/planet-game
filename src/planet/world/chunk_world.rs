@@ -1,4 +1,4 @@
-use crate::planet::culling::ChunkCullingBox;
+use crate::planet::rendering::culling::ChunkCullingBox;
 use crate::planet::world::{
     chunk::{CHUNK_SIZE, Chunk},
     voxel::VoxelType,

@@ -1,9 +1,18 @@
-use crate::planet::meshing::mesh_renderer::MeshRenderer;
-use crate::planet::world::{chunk_world::World, chunk::Chunk};
-use crate::planet::culling::ChunkCullingBox;
-use crate::planet::culling_system::{chunk_culling_system, draw_culling_box_gizmo, culling_box_input_system};
-use crate::planet::debug::{setup_debug_ui, update_debug_info};
-use crate::planet::planet_material::PlanetMaterialPlugin;
+use crate::planet::{
+    debug::{setup_debug_ui, update_debug_info},
+    meshing::mesh_renderer::{MeshRenderer, VOXEL_SIZE},
+    rendering::{
+        culling::ChunkCullingBox,
+        culling_system::{chunk_culling_system, draw_culling_box_gizmo, culling_box_input_system},
+        materials::PlanetMaterialPlugin,
+    },
+    world::{
+        chunk::CHUNK_SIZE,
+        chunk::Chunk,
+        chunk_world::World,
+    },
+};
+
 use bevy::prelude::*;
 
 pub struct PlanetPlugin;
@@ -21,14 +30,14 @@ impl PlanetPlugin {
         }
 
         // Mark all chunks as dirty so they get rendered on the first frame
-        world.mark_all_chunks_dirty();
+        // world.mark_all_chunks_dirty();
 
         commands.insert_resource(world);
         
         // Initialize the culling box resource
         commands.insert_resource(ChunkCullingBox::new(
             Vec2::new(0.0, 0.0), // Center at origin
-            Vec2::new(100.0, 100.0), // Half-extents of 100x100 world units
+            Vec2::new(VOXEL_SIZE * CHUNK_SIZE as f32, VOXEL_SIZE * CHUNK_SIZE as f32), // 2x2 chunks
         ));
     }
 }

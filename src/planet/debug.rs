@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::planet::world::chunk_world::World;
-use crate::planet::culling::ChunkCullingBox;
+use crate::planet::rendering::culling::ChunkCullingBox;
 
 #[derive(Component)]
 pub struct DebugText;

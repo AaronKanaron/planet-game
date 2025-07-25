@@ -4,8 +4,11 @@ use bevy::{
     render::mesh::{Indices, PrimitiveTopology},
 };
 
-use crate::planet::{meshing::dual_contourer::DualContourer, planet_material::DirtMaterial, world::{chunk_world::World, voxel::{Voxel, VoxelType}}};
-use crate::planet::planet_material::RockMaterial;
+use crate::planet::{
+    meshing::dual_contourer::DualContourer,
+    world::{chunk_world::World, voxel::{Voxel, VoxelType}},
+    rendering::materials::{RockMaterial, DirtMaterial}
+};
 
 /// Voxel size in world units
 pub const VOXEL_SIZE: f32 = 6.0;
