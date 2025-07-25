@@ -23,6 +23,14 @@ impl Default for ChunkCullingBox {
 }
 
 impl ChunkCullingBox {
+    /// Create a new culling box with the given center and half-extents
+    pub fn new(center: Vec2, half_extents: Vec2) -> Self {
+        Self {
+            center,
+            half_extents,
+            enabled: true,
+        }
+    }
     /// Check if a chunk at the given chunk coordinates is within the bounding box
     pub fn contains_chunk(&self, chunk_x: i32, chunk_y: i32, chunk_size: usize) -> bool {
         if !self.enabled {

@@ -1,5 +1,5 @@
 pub mod chunk;
-pub mod chunk_world;
+pub mod world;
 pub mod dual_contourer;
 pub mod greedy_mesh;
 
@@ -9,7 +9,7 @@ use bevy::{
     render::mesh::{Indices, PrimitiveTopology},
 };
 
-use crate::planet::{mesh::{chunk_world::ChunkWorld, dual_contourer::DualContourer}, planet_material::DirtMaterial};
+use crate::planet::{mesh::{world::World, dual_contourer::DualContourer}, planet_material::DirtMaterial};
 use crate::planet::planet_material::RockMaterial;
 
 /// Voxel size in world units
@@ -38,7 +38,7 @@ impl MeshRenderer {
     /// Despawn mesh entities for chunks that are no longer loaded
     pub fn cleanup_unloaded_chunks(
         mut commands: Commands,
-        world: Res<ChunkWorld>,
+        world: Res<World>,
         existing_chunks: Query<(Entity, &ChunkMesh)>,
     ) {
         for (entity, chunk_mesh) in existing_chunks.iter() {
@@ -51,7 +51,7 @@ impl MeshRenderer {
     /// This updates the planet mesh by only regenerating the dirty, "changed" chunks.
     pub fn render_mesh(
         mut commands: Commands,
-        mut world: ResMut<ChunkWorld>,
+        mut world: ResMut<World>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<ColorMaterial>>,
         mut rock_materials: ResMut<Assets<RockMaterial>>,

@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::planet::mesh::chunk_world::ChunkWorld;
+use crate::planet::mesh::world::World;
 use crate::planet::culling::ChunkCullingBox;
 
 #[derive(Component)]
@@ -26,12 +26,12 @@ pub fn setup_debug_ui(mut commands: Commands) {
 
 /// System to update debug information
 pub fn update_debug_info(
-    chunk_world: Res<ChunkWorld>,
+    chunk_world: Res<World>,
     culling_box: Res<ChunkCullingBox>,
     mut query: Query<&mut Text, With<DebugText>>,
 ) {
     if let Ok(mut text) = query.single_mut() {
-        let chunk_size = ChunkWorld::chunk_size();
+        let chunk_size = World::chunk_size();
         let (min_chunk_x, min_chunk_y, max_chunk_x, max_chunk_y) = 
             culling_box.get_chunk_bounds(chunk_size);
         

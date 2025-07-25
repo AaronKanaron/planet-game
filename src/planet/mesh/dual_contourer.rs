@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::planet::mesh::{
-    VOXEL_SIZE, VoxelType, chunk_world::ChunkWorld, greedy_mesh::GreedyMeshHandler,
+    VOXEL_SIZE, VoxelType, world::World, greedy_mesh::GreedyMeshHandler,
 };
 
 /// Dual contouring algorithm for generating meshes from voxel data
@@ -21,14 +21,14 @@ pub struct CellMesh {
 
 impl DualContourer {
     pub fn generate_chunk_mesh(
-        world: &ChunkWorld,
+        world: &World,
         chunk_x: i32,
         chunk_y: i32,
         target_type: VoxelType,
     ) -> (Vec<[f32; 3]>, Vec<u32>) {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
-        let chunk_size = ChunkWorld::chunk_size() as i32;
+        let chunk_size = World::chunk_size() as i32;
 
         // Calculate world bounds for this specific chunk
         let world_min_x = chunk_x * chunk_size;
@@ -114,12 +114,12 @@ impl DualContourer {
 
     // v--------- Private methods ----------v //
     fn get_cell_configuration(
-        world: &ChunkWorld,
+        world: &World,
         x: i32,
         y: i32,
         target_type: VoxelType,
     ) -> CellConfiguration {
-        let chunk_size = ChunkWorld::chunk_size() as i32;
+        let chunk_size = World::chunk_size() as i32;
         
         // Helper function to safely get voxel, defaulting to Air if chunk not loaded
         let safe_get_voxel = |vx: i32, vy: i32| -> VoxelType {

@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 use crate::planet::culling::ChunkCullingBox;
-use crate::planet::mesh::chunk_world::ChunkWorld;
+use crate::planet::mesh::world::World;
 
 /// System that handles chunk loading and unloading based on the culling box
 pub fn chunk_culling_system(
-    mut chunk_world: ResMut<ChunkWorld>,
+    mut chunk_world: ResMut<World>,
     culling_box: Res<ChunkCullingBox>,
 ) {
     if !culling_box.enabled {

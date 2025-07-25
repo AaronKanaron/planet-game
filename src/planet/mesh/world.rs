@@ -7,14 +7,14 @@ use bevy::{platform::collections::HashMap, prelude::*};
 use noise::Perlin;
 
 #[derive(Resource)]
-pub struct ChunkWorld {
+pub struct World {
     /// Loaded chunks by their world position
     pub loaded_chunks: HashMap<(i32, i32), Chunk>,
 
     pub noise: Perlin,
 }
 
-impl ChunkWorld {
+impl World {
     pub fn new() -> Self {
         Self {
             loaded_chunks: HashMap::new(),

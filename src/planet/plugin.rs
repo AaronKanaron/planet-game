@@ -1,4 +1,4 @@
-use crate::planet::mesh::{MeshRenderer, chunk::Chunk, chunk_world::ChunkWorld};
+use crate::planet::mesh::{MeshRenderer, chunk::Chunk, world::World};
 use crate::planet::culling::ChunkCullingBox;
 use crate::planet::culling_system::{chunk_culling_system, draw_culling_box_gizmo, culling_box_input_system};
 use crate::planet::debug::{setup_debug_ui, update_debug_info};
@@ -9,7 +9,7 @@ pub struct PlanetPlugin;
 
 impl PlanetPlugin {
     fn setup(mut commands: Commands) {
-        let mut world = ChunkWorld::new();
+        let mut world = World::new();
 
         // Load initial chunks in a smaller area since we'll use culling
         for cx in 0..4 {
@@ -25,7 +25,10 @@ impl PlanetPlugin {
         commands.insert_resource(world);
         
         // Initialize the culling box resource
-        commands.insert_resource(ChunkCullingBox::default());
+        commands.insert_resource(ChunkCullingBox::new(
+            Vec2::new(0.0, 0.0), // Center at origin
+            Vec2::new(100.0, 100.0), // Half-extents of 100x100 world units
+        ));
     }
 }
 
