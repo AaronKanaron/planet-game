@@ -1,11 +1,11 @@
-use bevy::{color::palettes::css::GRAY, prelude::*, render::{camera::RenderTarget, render_resource::{Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages}, view::RenderLayers}, window::WindowResized};
+use bevy::{color::palettes::css::GRAY, prelude::*, render::{camera::RenderTarget, render_resource::{Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages}, view::RenderLayers}, window::WindowResized, input::ButtonInput};
 
 
 /// In-game resolution width.
-const RES_WIDTH: u32 = 160*2;
+const RES_WIDTH: u32 = 240;
 
 /// In-game resolution height.
-const RES_HEIGHT: u32 = 90*2;
+const RES_HEIGHT: u32 = 135;
 
 /// Default render layers for pixel-perfect rendering.
 /// You can skip adding this component, as this is the default.
@@ -32,7 +32,7 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_camera)
-            .add_systems(Update, fit_canvas);
+            .add_systems(Update, (fit_canvas, handle_zoom));
     }
 }
 
@@ -101,5 +101,27 @@ fn fit_canvas(
         let h_scale = event.width / RES_WIDTH as f32;
         let v_scale = event.height / RES_HEIGHT as f32;
         projection.scale = 1. / h_scale.min(v_scale).round();
+    }
+}
+
+/// Handles zoom in/out with I and O keys
+fn handle_zoom(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut projection: Single<&mut Projection, With<InGameCamera>>,
+) {
+    let Projection::Orthographic(projection) = &mut **projection else {
+        return;
+    };
+
+    let zoom_factor = 1.1;
+    let min_scale = 0.1;
+    let max_scale = 5.0;
+
+    if keyboard_input.just_pressed(KeyCode::KeyI) {
+        // Zoom in: decrease scale
+        projection.scale = (projection.scale / zoom_factor).max(min_scale);
+    } else if keyboard_input.just_pressed(KeyCode::KeyO) {
+        // Zoom out: increase scale
+        projection.scale = (projection.scale * zoom_factor).min(max_scale);
     }
 }

@@ -6,7 +6,7 @@ use bevy::input::ButtonInput;
 use bevy::window::WindowPlugin;
 use bevy::{diagnostic::LogDiagnosticsPlugin, prelude::*};
 
-// use crate::camera::CameraPlugin;
+use crate::camera::CameraPlugin;
 use crate::planet::plugin::PlanetPlugin;
 use crate::planet::world::chunk_world::World;
 use crate::planet::{meshing::mesh_renderer::VOXEL_SIZE, world::voxel::VoxelType};
