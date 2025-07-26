@@ -42,35 +42,12 @@ impl World {
         let local_x = x.rem_euclid(CHUNK_SIZE as i32);
         let local_y = y.rem_euclid(CHUNK_SIZE as i32);
 
-        // Get the chunk, or optionally generate it
         if let Some(chunk) = self.loaded_chunks.get_mut(&(chunk_x, chunk_y)) {
             chunk.set_voxel(local_x as usize, local_y as usize, vtype);
 
-            // Mark adjacent chunks as dirty if we're near the border
-            // This ensures that mesh boundaries are updated correctly
-            if local_x == 0 && chunk_x > 0 {
-                if let Some(adj_chunk) = self.loaded_chunks.get_mut(&(chunk_x - 1, chunk_y)) {
-                    adj_chunk.mark_dirty();
-                }
-            }
-            if local_x == (CHUNK_SIZE as i32 - 1) {
-                if let Some(adj_chunk) = self.loaded_chunks.get_mut(&(chunk_x + 1, chunk_y)) {
-                    adj_chunk.mark_dirty();
-                }
-            }
-            if local_y == 0 && chunk_y > 0 {
-                if let Some(adj_chunk) = self.loaded_chunks.get_mut(&(chunk_x, chunk_y - 1)) {
-                    adj_chunk.mark_dirty();
-                }
-            }
-            if local_y == (CHUNK_SIZE as i32 - 1) {
-                if let Some(adj_chunk) = self.loaded_chunks.get_mut(&(chunk_x, chunk_y + 1)) {
-                    adj_chunk.mark_dirty();
-                }
-            }
+            self.mark_neighboring_chunks_dirty(chunk_x, chunk_y, local_x, local_y);
         } else {
-            // This means that the vvoxel that is being set is in a chunk that does not exist yet.
-            // Optionally generate and insert chunk
+            // Generate the chunk ?
         }
     }
 
@@ -101,6 +78,44 @@ impl World {
     pub fn mark_chunk_clean(&mut self, chunk_x: i32, chunk_y: i32) {
         if let Some(chunk) = self.loaded_chunks.get_mut(&(chunk_x, chunk_y)) {
             chunk.mark_clean();
+        }
+    }
+
+    /// Mark neighboring chunks as dirty when a voxel near chunk boundaries is modified.
+    /// This ensures that mesh boundaries are updated correctly for dual contouring.
+    fn mark_neighboring_chunks_dirty(
+        &mut self,
+        chunk_x: i32,
+        chunk_y: i32,
+        local_x: i32,
+        local_y: i32,
+    ) {
+        // Edge cases
+        if local_x == 0 {
+            self.mark_chunk_dirty(chunk_x - 1, chunk_y);
+        }
+        if local_x == (CHUNK_SIZE as i32 - 1) {
+            self.mark_chunk_dirty(chunk_x + 1, chunk_y);
+        }
+        if local_y == 0 {
+            self.mark_chunk_dirty(chunk_x, chunk_y - 1);
+        }
+        if local_y == (CHUNK_SIZE as i32 - 1) {
+            self.mark_chunk_dirty(chunk_x, chunk_y + 1);
+        }
+
+        // Corner casses,
+        if local_x == 0 && local_y == 0 {
+            self.mark_chunk_dirty(chunk_x - 1, chunk_y - 1);
+        }
+        if local_x == (CHUNK_SIZE as i32 - 1) && local_y == 0 {
+            self.mark_chunk_dirty(chunk_x + 1, chunk_y - 1);
+        }
+        if local_x == 0 && local_y == (CHUNK_SIZE as i32 - 1) {
+            self.mark_chunk_dirty(chunk_x - 1, chunk_y + 1);
+        }
+        if local_x == (CHUNK_SIZE as i32 - 1) && local_y == (CHUNK_SIZE as i32 - 1) {
+            self.mark_chunk_dirty(chunk_x + 1, chunk_y + 1);
         }
     }
 
