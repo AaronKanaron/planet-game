@@ -11,6 +11,7 @@ use bevy::{
     },
     window::WindowResized,
 };
+use crate::planet::rendering::culling::ChunkCullingBox;
 
 /// In-game resolution width.
 const RES_WIDTH: u32 = 240;
@@ -43,7 +44,7 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_camera)
-            .add_systems(Update, (fit_canvas, handle_zoom));
+            .add_systems(Update, (fit_canvas, handle_zoom, follow_culling_box));
     }
 }
 
@@ -123,9 +124,9 @@ fn handle_zoom(
         return;
     };
 
-    let zoom_factor = 1.1;
+    let zoom_factor = 1.2;
     let min_scale = 0.1;
-    let max_scale = 5.0;
+    let max_scale = 50.0;
 
     if keyboard_input.just_pressed(KeyCode::KeyI) {
         // Zoom in: decrease scale
@@ -134,4 +135,14 @@ fn handle_zoom(
         // Zoom out: increase scale
         projection.scale = (projection.scale * zoom_factor).min(max_scale);
     }
+}
+
+/// Makes the camera follow the culling box center
+fn follow_culling_box(
+    culling_box: Res<ChunkCullingBox>,
+    mut camera_transform: Single<&mut Transform, With<InGameCamera>>,
+) {
+    // Update camera position to follow the culling box center
+    camera_transform.translation.x = culling_box.center.x;
+    camera_transform.translation.y = culling_box.center.y;
 }
