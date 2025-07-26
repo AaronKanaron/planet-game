@@ -64,14 +64,33 @@ impl Chunk {
         }
     }
 
-    /// Sample the terrain height using Perlin noise
+    /// Sample the terrain height using Perlin noise with circular falloff
     fn sample_terrain_height(world_x: f64, world_y: f64, noise: &Perlin) -> f64 {
         let base_scale = 50.0;
 
-        // Single noise sample - should be in range [-1, 1]
-        let height = noise.get([world_x / base_scale, world_y / base_scale]);
+        // Planet radius - adjust this to change the size of the planet
+        let planet_radius = 200.0;
 
-        height
+        // Calculate distance from center (0, 0)
+        let distance_from_center = (world_x * world_x + world_y * world_y).sqrt();
+
+        // Create circular falloff - terrain gets lower as you get farther from center
+        let distance_factor = if distance_from_center < planet_radius {
+            // Smooth falloff using cosine interpolation for potato-like shape
+            let normalized_distance = distance_from_center / planet_radius;
+            ((1.0 - normalized_distance).powf(1.5)) * 2.0 - 1.0
+        } else {
+            // Outside planet radius = always air
+            -2.0
+        };
+
+        // Add Perlin noise for surface detail and potato-like irregularity
+        let surface_noise = noise.get([world_x / base_scale, world_y / base_scale]) * 0.3;
+        let detail_noise =
+            noise.get([world_x / (base_scale * 0.3), world_y / (base_scale * 0.3)]) * 0.1;
+
+        // Combine distance falloff with noise for organic planet shape
+        distance_factor + surface_noise + detail_noise
     }
 
     pub fn set_voxel(&mut self, x: usize, y: usize, vtype: VoxelType) {
