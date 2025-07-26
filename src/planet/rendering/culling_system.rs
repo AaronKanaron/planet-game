@@ -56,11 +56,22 @@ pub fn draw_culling_box_gizmo(mut gizmos: Gizmos, culling_box: Res<ChunkCullingB
     let min = culling_box.center - culling_box.half_extents;
     let max = culling_box.center + culling_box.half_extents;
 
+    // Draw the main culling box (yellow)
     gizmos.rect_2d(
         culling_box.center,
         culling_box.half_extents * 2.0,   // size
         Color::linear_rgb(1.0, 1.0, 0.0), // yellow
     );
+
+    // Draw the padded area (light blue, semi-transparent effect with dashed lines)
+    if culling_box.padding > 0.0 {
+        let padded_size = (culling_box.half_extents + Vec2::splat(culling_box.padding)) * 2.0;
+        gizmos.rect_2d(
+            culling_box.center,
+            padded_size,
+            Color::linear_rgb(0.5, 0.8, 1.0), // light blue
+        );
+    }
 
     // Draw corner markers
     let corner_size = 10.0;
@@ -94,6 +105,7 @@ pub fn culling_box_input_system(
 ) {
     let move_speed = 100.0; // units per second
     let resize_speed = 50.0; // units per second
+    let padding_speed = 25.0; // units per second
 
     let delta_time = time.delta_secs();
 
@@ -125,6 +137,16 @@ pub fn culling_box_input_system(
     }
     if keyboard_input.pressed(KeyCode::ArrowRight) {
         culling_box.half_extents.x += resize_speed * delta_time;
+    }
+
+    // Padding controls (B/N keys)
+    if keyboard_input.pressed(KeyCode::KeyB) {
+        culling_box.padding += padding_speed * delta_time;
+        info!("Culling padding increased to: {:.1}", culling_box.padding);
+    }
+    if keyboard_input.pressed(KeyCode::KeyN) {
+        culling_box.padding = (culling_box.padding - padding_speed * delta_time).max(0.0);
+        info!("Culling padding decreased to: {:.1}", culling_box.padding);
     }
 
     // Toggle culling box (Space key)

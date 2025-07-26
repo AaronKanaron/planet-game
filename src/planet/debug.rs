@@ -10,7 +10,7 @@ pub fn setup_debug_ui(mut commands: Commands) {
     commands.spawn((
         Text::new("Debug Info"),
         TextFont {
-            font_size: 20.0,
+            font_size: 16.0,
             ..default()
         },
         TextColor(Color::WHITE),
@@ -50,13 +50,14 @@ pub fn update_debug_info(
         };
 
         **text = format!(
-            "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nEnabled: {}\nChunk Range: ({}, {}) to ({}, {})\n\nControls:\nWASD - Move box\nArrows - Resize box\nSpace - Toggle culling",
+            "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nEnabled: {}\nChunk Range: ({}, {}) to ({}, {})\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling",
             chunk_world.loaded_chunk_count(),
             expected_chunks,
             culling_box.center.x,
             culling_box.center.y,
             culling_box.half_extents.x * 2.0,
             culling_box.half_extents.y * 2.0,
+            culling_box.padding,
             culling_box.enabled,
             min_chunk_x,
             min_chunk_y,

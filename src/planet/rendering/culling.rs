@@ -8,6 +8,8 @@ pub struct ChunkCullingBox {
     pub center: Vec2,
     /// Half-extents of the bounding box in world coordinates
     pub half_extents: Vec2,
+    /// Additional padding around the culling box for preloading chunks
+    pub padding: f32,
     /// Whether the culling box is enabled
     pub enabled: bool,
 }
@@ -17,6 +19,7 @@ impl Default for ChunkCullingBox {
         Self {
             center: Vec2::ZERO,
             half_extents: Vec2::new(200.0, 200.0), // Default 400x400 world units
+            padding: 50.0,                         // Default padding
             enabled: true,
         }
     }
@@ -28,6 +31,7 @@ impl ChunkCullingBox {
         Self {
             center,
             half_extents,
+            padding: 50.0,
             enabled: true,
         }
     }
@@ -46,11 +50,11 @@ impl ChunkCullingBox {
         let chunk_min_y = chunk_y as f32 * chunk_world_size;
         let chunk_max_y = chunk_min_y + chunk_world_size;
 
-        // Calculate the bounding box bounds
-        let min_x = self.center.x - self.half_extents.x;
-        let max_x = self.center.x + self.half_extents.x;
-        let min_y = self.center.y - self.half_extents.y;
-        let max_y = self.center.y + self.half_extents.y;
+        // Calculate the bounding box bounds with padding
+        let min_x = self.center.x - self.half_extents.x - self.padding;
+        let max_x = self.center.x + self.half_extents.x + self.padding;
+        let min_y = self.center.y - self.half_extents.y - self.padding;
+        let max_y = self.center.y + self.half_extents.y + self.padding;
 
         // Check for overlap using AABB intersection
         !(chunk_max_x <= min_x
@@ -63,10 +67,10 @@ impl ChunkCullingBox {
     pub fn get_chunk_bounds(&self, chunk_size: usize) -> (i32, i32, i32, i32) {
         let chunk_world_size = (chunk_size as f32) * VOXEL_SIZE;
 
-        let min_x = self.center.x - self.half_extents.x;
-        let max_x = self.center.x + self.half_extents.x;
-        let min_y = self.center.y - self.half_extents.y;
-        let max_y = self.center.y + self.half_extents.y;
+        let min_x = self.center.x - self.half_extents.x - self.padding;
+        let max_x = self.center.x + self.half_extents.x + self.padding;
+        let min_y = self.center.y - self.half_extents.y - self.padding;
+        let max_y = self.center.y + self.half_extents.y + self.padding;
 
         // Calculate which chunks could potentially intersect with the bounding box
         // We use floor for min and floor for max because chunks are aligned to grid
