@@ -1,8 +1,8 @@
 //folders
 pub mod meshing;
-pub mod world;
 pub mod rendering;
+pub mod world;
 
 //files
-pub mod plugin;
 pub mod debug;
+pub mod plugin;

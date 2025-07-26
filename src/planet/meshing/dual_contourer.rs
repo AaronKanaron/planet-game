@@ -1,18 +1,9 @@
 use bevy::prelude::*;
 
 use crate::planet::{
-    meshing::{
-        mesh_renderer::{
-            VOXEL_SIZE
-        },
-        greedy_mesh::GreedyMeshHandler
-    },
-    world::{
-        chunk_world::World,
-        voxel::VoxelType
-    }        
+    meshing::{greedy_mesh::GreedyMeshHandler, mesh_renderer::VOXEL_SIZE},
+    world::{chunk_world::World, voxel::VoxelType},
 };
-
 
 /// Dual contouring algorithm for generating meshes from voxel data
 pub struct DualContourer;
@@ -104,11 +95,7 @@ impl DualContourer {
 
             // Add vertices with proper world positioning
             for vertex in cell_mesh.vertices {
-                vertices.push([
-                    vertex.x * VOXEL_SIZE,
-                    vertex.y * VOXEL_SIZE,
-                    0.0,
-                ]);
+                vertices.push([vertex.x * VOXEL_SIZE, vertex.y * VOXEL_SIZE, 0.0]);
             }
 
             // Add indices with offset
@@ -130,19 +117,19 @@ impl DualContourer {
         target_type: VoxelType,
     ) -> CellConfiguration {
         let chunk_size = World::chunk_size() as i32;
-        
+
         // Helper function to safely get voxel, defaulting to Air if chunk not loaded
         let safe_get_voxel = |vx: i32, vy: i32| -> VoxelType {
             let chunk_x = vx.div_euclid(chunk_size);
             let chunk_y = vy.div_euclid(chunk_size);
-            
+
             if world.is_chunk_loaded(chunk_x, chunk_y) {
                 world.get_voxel(vx, vy)
             } else {
                 VoxelType::Air // Default to Air for missing chunks
             }
         };
-        
+
         CellConfiguration {
             corners: [
                 safe_get_voxel(x, y) == target_type,         // bottom-left

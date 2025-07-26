@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use crate::planet::meshing::mesh_renderer::VOXEL_SIZE;
+use bevy::prelude::*;
 
 /// Represents a 2D bounding box for chunk culling
 #[derive(Resource)]
@@ -39,7 +39,7 @@ impl ChunkCullingBox {
 
         // Convert chunk coordinates to world coordinates
         let chunk_world_size = (chunk_size as f32) * VOXEL_SIZE;
-        
+
         // Calculate chunk bounds - chunks start at their coordinate * size
         let chunk_min_x = chunk_x as f32 * chunk_world_size;
         let chunk_max_x = chunk_min_x + chunk_world_size;
@@ -53,13 +53,16 @@ impl ChunkCullingBox {
         let max_y = self.center.y + self.half_extents.y;
 
         // Check for overlap using AABB intersection
-        !(chunk_max_x <= min_x || chunk_min_x >= max_x || chunk_max_y <= min_y || chunk_min_y >= max_y)
+        !(chunk_max_x <= min_x
+            || chunk_min_x >= max_x
+            || chunk_max_y <= min_y
+            || chunk_min_y >= max_y)
     }
 
     /// Get the minimum and maximum chunk coordinates that could be within the bounding box
     pub fn get_chunk_bounds(&self, chunk_size: usize) -> (i32, i32, i32, i32) {
         let chunk_world_size = (chunk_size as f32) * VOXEL_SIZE;
-        
+
         let min_x = self.center.x - self.half_extents.x;
         let max_x = self.center.x + self.half_extents.x;
         let min_y = self.center.y - self.half_extents.y;

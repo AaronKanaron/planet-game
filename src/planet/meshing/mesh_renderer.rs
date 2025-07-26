@@ -6,15 +6,16 @@ use bevy::{
 
 use crate::planet::{
     meshing::dual_contourer::DualContourer,
-    world::{chunk_world::World, voxel::{Voxel, VoxelType}},
-    rendering::materials::{RockMaterial, DirtMaterial}
+    rendering::materials::{DirtMaterial, RockMaterial},
+    world::{
+        chunk_world::World,
+        voxel::{Voxel, VoxelType},
+    },
 };
 
 /// Voxel size in world units
 pub const VOXEL_SIZE: f32 = 6.0;
 const WIREFRAME_MODE: bool = true;
-
-
 
 #[derive(Component)]
 pub struct ChunkMesh {
@@ -101,7 +102,7 @@ impl MeshRenderer {
                                 Voxel,
                                 ChunkMesh { chunk_x, chunk_y },
                             ));
-                        },
+                        }
                         VoxelType::Dirt => {
                             let dirt_material = DirtMaterial {
                                 color: LinearRgba::rgb(0.4, 0.26, 0.19),
@@ -114,10 +115,10 @@ impl MeshRenderer {
                                 Voxel,
                                 ChunkMesh { chunk_x, chunk_y },
                             ));
-                        },
+                        }
                         VoxelType::Air => {
                             continue;
-                        },
+                        }
                     }
 
                     // Create wireframe mesh
@@ -162,11 +163,7 @@ impl MeshRenderer {
 
         let size = max_bounds - min_bounds;
         // Ensure minimum size to avoid division by zero
-        Vec3::new(
-            size.x.max(1.0),
-            size.y.max(1.0),
-            size.z.max(1.0),
-        )
+        Vec3::new(size.x.max(1.0), size.y.max(1.0), size.z.max(1.0))
     }
 
     /// For debugging: spawn a wireframe mesh for the chunk.

@@ -1,31 +1,30 @@
+use crate::planet::{rendering::culling::ChunkCullingBox, world::chunk_world::World};
 use bevy::prelude::*;
-use crate::planet::{
-    rendering::culling::ChunkCullingBox,
-    world::chunk_world::World,
-};
 
 /// System that handles chunk loading and unloading based on the culling box
-pub fn chunk_culling_system(
-    mut chunk_world: ResMut<World>,
-    culling_box: Res<ChunkCullingBox>,
-) {
+pub fn chunk_culling_system(mut chunk_world: ResMut<World>, culling_box: Res<ChunkCullingBox>) {
     if !culling_box.enabled {
         return;
     }
 
     let should_process = culling_box.is_changed() || chunk_world.loaded_chunk_count() == 0;
-    if !should_process { return; }
+    if !should_process {
+        return;
+    }
 
     // Load chunks within the bounding box
     let loaded_chunks = chunk_world.load_chunks_in_box(&culling_box);
 
     // Unload chunks outside the bounding box
     let unloaded_chunks = chunk_world.unload_chunks_outside_box(&culling_box);
-    
+
     if !unloaded_chunks.is_empty() {
-        info!("Unloaded {} chunks outside culling box", unloaded_chunks.len());
+        info!(
+            "Unloaded {} chunks outside culling box",
+            unloaded_chunks.len()
+        );
     }
-    
+
     if !loaded_chunks.is_empty() {
         info!("Loaded {} new chunks", loaded_chunks.len());
     }
@@ -33,15 +32,15 @@ pub fn chunk_culling_system(
     // Only mark newly loaded chunks as dirty, not all chunks
     for &chunk_pos in &loaded_chunks {
         chunk_world.mark_chunk_dirty(chunk_pos.0, chunk_pos.1);
-        
+
         // Also mark neighboring chunks as dirty to ensure proper edge connectivity
         let neighbors = [
-            (chunk_pos.0 - 1, chunk_pos.1),     // left
-            (chunk_pos.0 + 1, chunk_pos.1),     // right
-            (chunk_pos.0, chunk_pos.1 - 1),     // bottom
-            (chunk_pos.0, chunk_pos.1 + 1),     // top
+            (chunk_pos.0 - 1, chunk_pos.1), // left
+            (chunk_pos.0 + 1, chunk_pos.1), // right
+            (chunk_pos.0, chunk_pos.1 - 1), // bottom
+            (chunk_pos.0, chunk_pos.1 + 1), // top
         ];
-        
+
         for &(nx, ny) in &neighbors {
             chunk_world.mark_chunk_dirty(nx, ny);
         }
@@ -49,10 +48,7 @@ pub fn chunk_culling_system(
 }
 
 /// System that draws the culling box gizmo
-pub fn draw_culling_box_gizmo(
-    mut gizmos: Gizmos,
-    culling_box: Res<ChunkCullingBox>,
-) {
+pub fn draw_culling_box_gizmo(mut gizmos: Gizmos, culling_box: Res<ChunkCullingBox>) {
     if !culling_box.enabled {
         return;
     }
@@ -62,7 +58,7 @@ pub fn draw_culling_box_gizmo(
 
     gizmos.rect_2d(
         culling_box.center,
-        culling_box.half_extents * 2.0, // size
+        culling_box.half_extents * 2.0,   // size
         Color::linear_rgb(1.0, 1.0, 0.0), // yellow
     );
 
@@ -98,7 +94,7 @@ pub fn culling_box_input_system(
 ) {
     let move_speed = 100.0; // units per second
     let resize_speed = 50.0; // units per second
-    
+
     let delta_time = time.delta_secs();
 
     // Movement controls (WASD) - Fixed Y-axis direction
@@ -120,10 +116,12 @@ pub fn culling_box_input_system(
         culling_box.half_extents.y += resize_speed * delta_time;
     }
     if keyboard_input.pressed(KeyCode::ArrowDown) {
-        culling_box.half_extents.y = (culling_box.half_extents.y - resize_speed * delta_time).max(10.0);
+        culling_box.half_extents.y =
+            (culling_box.half_extents.y - resize_speed * delta_time).max(10.0);
     }
     if keyboard_input.pressed(KeyCode::ArrowLeft) {
-        culling_box.half_extents.x = (culling_box.half_extents.x - resize_speed * delta_time).max(10.0);
+        culling_box.half_extents.x =
+            (culling_box.half_extents.x - resize_speed * delta_time).max(10.0);
     }
     if keyboard_input.pressed(KeyCode::ArrowRight) {
         culling_box.half_extents.x += resize_speed * delta_time;
@@ -132,6 +130,13 @@ pub fn culling_box_input_system(
     // Toggle culling box (Space key)
     if keyboard_input.just_pressed(KeyCode::Space) {
         culling_box.enabled = !culling_box.enabled;
-        info!("Chunk culling {}", if culling_box.enabled { "enabled" } else { "disabled" });
+        info!(
+            "Chunk culling {}",
+            if culling_box.enabled {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        );
     }
 }

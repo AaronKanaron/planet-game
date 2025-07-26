@@ -1,6 +1,6 @@
-use bevy::prelude::*;
-use crate::planet::world::chunk_world::World;
 use crate::planet::rendering::culling::ChunkCullingBox;
+use crate::planet::world::chunk_world::World;
+use bevy::prelude::*;
 
 #[derive(Component)]
 pub struct DebugText;
@@ -32,9 +32,9 @@ pub fn update_debug_info(
 ) {
     if let Ok(mut text) = query.single_mut() {
         let chunk_size = World::chunk_size();
-        let (min_chunk_x, min_chunk_y, max_chunk_x, max_chunk_y) = 
+        let (min_chunk_x, min_chunk_y, max_chunk_x, max_chunk_y) =
             culling_box.get_chunk_bounds(chunk_size);
-        
+
         let expected_chunks = if culling_box.enabled {
             let mut count = 0;
             for chunk_x in min_chunk_x..=max_chunk_x {
@@ -50,7 +50,7 @@ pub fn update_debug_info(
         };
 
         **text = format!(
-            "Loaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nEnabled: {}\nChunk Range: ({}, {}) to ({}, {})\n\nControls:\nWASD - Move box\nArrows - Resize box\nSpace - Toggle culling",
+            "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nEnabled: {}\nChunk Range: ({}, {}) to ({}, {})\n\nControls:\nWASD - Move box\nArrows - Resize box\nSpace - Toggle culling",
             chunk_world.loaded_chunk_count(),
             expected_chunks,
             culling_box.center.x,

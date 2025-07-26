@@ -1,4 +1,4 @@
-use crate::planet::meshing::{mesh_renderer::VOXEL_SIZE, dual_contourer::CellMesh};
+use crate::planet::meshing::{dual_contourer::CellMesh, mesh_renderer::VOXEL_SIZE};
 use bevy::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -132,13 +132,9 @@ impl GreedyMeshHandler {
         let h = quad.height as f32;
 
         vertices.extend_from_slice(&[
-            [x * VOXEL_SIZE, y * VOXEL_SIZE, 0.0], // bottom-left
+            [x * VOXEL_SIZE, y * VOXEL_SIZE, 0.0],       // bottom-left
             [(x + w) * VOXEL_SIZE, y * VOXEL_SIZE, 0.0], // bottom-right
-            [
-                (x + w) * VOXEL_SIZE,
-                (y + h) * VOXEL_SIZE,
-                0.0,
-            ], // top-right
+            [(x + w) * VOXEL_SIZE, (y + h) * VOXEL_SIZE, 0.0], // top-right
             [x * VOXEL_SIZE, (y + h) * VOXEL_SIZE, 0.0], // top-left
         ]);
 

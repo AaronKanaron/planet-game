@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = "0.16.1"
+bevy = { version = "0.16.1", features = ["bevy_dev_tools"] }
 bevy_picking = "0.16.1"
 nalgebra = "0.33.2"
 noise = "0.9.0"

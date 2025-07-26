@@ -3,14 +3,10 @@ use crate::planet::{
     meshing::mesh_renderer::{MeshRenderer, VOXEL_SIZE},
     rendering::{
         culling::ChunkCullingBox,
-        culling_system::{chunk_culling_system, draw_culling_box_gizmo, culling_box_input_system},
+        culling_system::{chunk_culling_system, culling_box_input_system, draw_culling_box_gizmo},
         materials::PlanetMaterialPlugin,
     },
-    world::{
-        chunk::CHUNK_SIZE,
-        chunk::Chunk,
-        chunk_world::World,
-    },
+    world::{chunk::CHUNK_SIZE, chunk::Chunk, chunk_world::World},
 };
 
 use bevy::prelude::*;
@@ -33,11 +29,14 @@ impl PlanetPlugin {
         // world.mark_all_chunks_dirty();
 
         commands.insert_resource(world);
-        
+
         // Initialize the culling box resource
         commands.insert_resource(ChunkCullingBox::new(
             Vec2::new(0.0, 0.0), // Center at origin
-            Vec2::new(VOXEL_SIZE * CHUNK_SIZE as f32, VOXEL_SIZE * CHUNK_SIZE as f32), // 2x2 chunks
+            Vec2::new(
+                VOXEL_SIZE * CHUNK_SIZE as f32,
+                VOXEL_SIZE * CHUNK_SIZE as f32,
+            ), // 2x2 chunks
         ));
     }
 }
@@ -46,13 +45,17 @@ impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(PlanetMaterialPlugin)
             .add_systems(Startup, (Self::setup, setup_debug_ui))
-            .add_systems(Update, (
-                chunk_culling_system,
-                MeshRenderer::cleanup_unloaded_chunks,
-                MeshRenderer::render_mesh,
-                draw_culling_box_gizmo,
-                culling_box_input_system,
-                update_debug_info,
-            ).chain()); // Use chain() to ensure proper ordering
+            .add_systems(
+                Update,
+                (
+                    chunk_culling_system,
+                    MeshRenderer::cleanup_unloaded_chunks,
+                    MeshRenderer::render_mesh,
+                    draw_culling_box_gizmo,
+                    culling_box_input_system,
+                    update_debug_info,
+                )
+                    .chain(),
+            ); // Use chain() to ensure proper ordering
     }
 }

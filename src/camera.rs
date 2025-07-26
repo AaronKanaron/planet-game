@@ -1,5 +1,16 @@
-use bevy::{color::palettes::css::GRAY, prelude::*, render::{camera::RenderTarget, render_resource::{Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages}, view::RenderLayers}, window::WindowResized, input::ButtonInput};
-
+use bevy::{
+    color::palettes::css::GRAY,
+    input::ButtonInput,
+    prelude::*,
+    render::{
+        camera::RenderTarget,
+        render_resource::{
+            Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+        },
+        view::RenderLayers,
+    },
+    window::WindowResized,
+};
 
 /// In-game resolution width.
 const RES_WIDTH: u32 = 240;
@@ -35,7 +46,6 @@ impl Plugin for CameraPlugin {
             .add_systems(Update, (fit_canvas, handle_zoom));
     }
 }
-
 
 fn setup_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let canvas_size = Extent3d {
