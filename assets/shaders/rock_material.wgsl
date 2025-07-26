@@ -52,12 +52,14 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     // Hard cracks/highlights based on noise thresholding
     let cracks = step(0.6, n);
 
-    // Rock base color and variations
-    let base_color = vec3<f32>(0.1, 0.1, 0.1);
+    // Use the color sent from Rust as the base color
+    let base_color = material.color.rgb;
     let color_variation = 0.5 * fbm(pos * 2.0);
 
     // Mix highlight (crack) color and add noise-based shading
-    let final_color = mix(base_color, vec3<f32>(0.2, 0.1, 0.05), cracks) + color_variation;
+    // Create highlights that are slightly brighter than the base color
+    let highlight_color = base_color + vec3<f32>(0.1, 0.05, 0.02);
+    let final_color = mix(base_color, highlight_color, cracks) + color_variation * 0.1;
 
-    return vec4<f32>(final_color, 1.0);
+    return vec4<f32>(final_color, material.color.a);
 }

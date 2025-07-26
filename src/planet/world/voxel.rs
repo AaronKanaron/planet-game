@@ -8,4 +8,6 @@ pub enum VoxelType {
     Air,
     Rock,
     Dirt,
+    Grass,
+    Core,
 }

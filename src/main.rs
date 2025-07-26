@@ -6,6 +6,7 @@ use bevy::input::ButtonInput;
 use bevy::prelude::*;
 use bevy::window::WindowPlugin;
 
+use crate::camera::CameraPlugin;
 use crate::planet::plugin::PlanetPlugin;
 use crate::planet::world::chunk_world::World;
 use crate::planet::{meshing::mesh_renderer::VOXEL_SIZE, world::voxel::VoxelType};
@@ -27,8 +28,8 @@ fn main() {
         )
         .add_plugins(DebugPlugin)
         .add_plugins(PlanetPlugin)
-        // .add_plugins(CameraPlugin)
-        .add_systems(Startup, setup)
+        .add_plugins(CameraPlugin)
+        // .add_systems(Startup, setup)
         .add_systems(Update, handle_input)
         .run();
 }
