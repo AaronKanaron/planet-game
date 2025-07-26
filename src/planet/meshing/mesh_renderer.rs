@@ -6,7 +6,7 @@ use bevy::{
 
 use crate::planet::{
     meshing::dual_contourer::DualContourer,
-    rendering::materials::{DirtMaterial, RockMaterial},
+    rendering::materials::{CoreMaterial, DirtMaterial, GrassMaterial, RockMaterial},
     world::{
         chunk_world::World,
         voxel::{Voxel, VoxelType},
@@ -47,6 +47,8 @@ impl MeshRenderer {
         mut materials: ResMut<Assets<ColorMaterial>>,
         mut rock_materials: ResMut<Assets<RockMaterial>>,
         mut dirt_materials: ResMut<Assets<DirtMaterial>>,
+        mut grass_materials: ResMut<Assets<GrassMaterial>>,
+        mut core_materials: ResMut<Assets<CoreMaterial>>,
         existing_chunks: Query<(Entity, &ChunkMesh)>,
     ) {
         let dirty_chunks = world.get_dirty_chunks();
@@ -68,7 +70,7 @@ impl MeshRenderer {
                 continue;
             }
 
-            for &material_type in &[VoxelType::Rock, VoxelType::Dirt] {
+            for &material_type in &[VoxelType::Rock, VoxelType::Dirt, VoxelType::Grass, VoxelType::Core] {
                 let (vertices, indices) =
                     DualContourer::generate_chunk_mesh(&world, chunk_x, chunk_y, material_type);
                 if !vertices.is_empty() && !indices.is_empty() {
@@ -111,6 +113,32 @@ impl MeshRenderer {
                             commands.spawn((
                                 Mesh2d(meshes.add(filled_mesh)),
                                 MeshMaterial2d(dirt_materials.add(dirt_material)),
+                                Transform::default(),
+                                Voxel,
+                                ChunkMesh { chunk_x, chunk_y },
+                            ));
+                        }
+                        VoxelType::Grass => {
+                            let grass_material = GrassMaterial {
+                                color: LinearRgba::rgb(0.0, 0.6, 0.0), // Green color for grass
+                                mesh_size,
+                            };
+                            commands.spawn((
+                                Mesh2d(meshes.add(filled_mesh)),
+                                MeshMaterial2d(grass_materials.add(grass_material)),
+                                Transform::default(),
+                                Voxel,
+                                ChunkMesh { chunk_x, chunk_y },
+                            ));
+                        }
+                        VoxelType::Core => {
+                            let core_material = CoreMaterial {
+                                color: LinearRgba::rgb(0.1, 0.1, 0.1), // Very dark gray/black for core
+                                mesh_size,
+                            };
+                            commands.spawn((
+                                Mesh2d(meshes.add(filled_mesh)),
+                                MeshMaterial2d(core_materials.add(core_material)),
                                 Transform::default(),
                                 Voxel,
                                 ChunkMesh { chunk_x, chunk_y },

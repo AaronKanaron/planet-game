@@ -54,6 +54,9 @@ impl Chunk {
             }
         }
 
+        // Post-process to add grass on surface
+        Self::add_surface_grass(&mut voxels, cx, cy);
+
         Chunk {
             voxels,
             dirty: true,
@@ -121,6 +124,12 @@ impl Chunk {
         // Distance ratio for cave probability
         let distance_ratio = distance_from_center / planet_radius;
         
+        // Don't generate caves in the core region
+        const CORE_RADIUS_RATIO: f64 = 0.2;
+        if distance_ratio < CORE_RADIUS_RATIO * 1.1 { // Give some buffer around core
+            return false;
+        }
+        
         // Don't generate caves too close to the planet's edge
         if distance_ratio > 0.95 {
             return false;
@@ -132,7 +141,7 @@ impl Chunk {
                                            world_y / cave_entrance_scale + 1000.0]);
         
         // Surface cave entrances - rare but noticeable
-        let surface_cave_threshold = 0.7; // Higher = fewer caves
+        let surface_cave_threshold = 0.2; // Higher = fewer caves
         let is_surface_cave_area = cave_entrance_noise > surface_cave_threshold;
         
         if is_surface_cave_area {
@@ -184,12 +193,123 @@ impl Chunk {
         false
     }
 
+    /// Add grass to surface areas of the chunk
+    fn add_surface_grass(voxels: &mut Vec<VoxelType>, chunk_x: i32, chunk_y: i32) {
+        const PLANET_CENTER_X: f64 = 0.0;
+        const PLANET_CENTER_Y: f64 = 0.0;
+        
+        // Simple approach: check each voxel and see if it has air neighbors in the outward direction
+        for dy in 0..CHUNK_SIZE {
+            for dx in 0..CHUNK_SIZE {
+                let idx = dy * CHUNK_SIZE + dx;
+                
+                if idx >= voxels.len() || voxels[idx] != VoxelType::Dirt {
+                    continue; // Only convert dirt to grass (not core, rock, or air)
+                }
+                
+                // Calculate world coordinates for this voxel
+                let world_x = (chunk_x * CHUNK_SIZE as i32 + dx as i32) as f64;
+                let world_y = (chunk_y * CHUNK_SIZE as i32 + dy as i32) as f64;
+                
+                // Calculate direction from planet center to this voxel
+                let dx_from_center = world_x - PLANET_CENTER_X;
+                let dy_from_center = world_y - PLANET_CENTER_Y;
+                let distance_from_center = (dx_from_center * dx_from_center + dy_from_center * dy_from_center).sqrt();
+                
+                if distance_from_center < 1.0 {
+                    continue; // Skip if too close to center
+                }
+                
+                // Check if this dirt voxel has any air neighbors within the same chunk
+                let mut has_air_neighbor = false;
+                
+                // Check all 8 directions around this voxel
+                for neighbor_dy in -1..=1i32 {
+                    for neighbor_dx in -1..=1i32 {
+                        if neighbor_dx == 0 && neighbor_dy == 0 {
+                            continue; // Skip self
+                        }
+                        
+                        let neighbor_x = dx as i32 + neighbor_dx;
+                        let neighbor_y = dy as i32 + neighbor_dy;
+                        
+                        // Only check neighbors within the current chunk
+                        if neighbor_x >= 0 && neighbor_x < CHUNK_SIZE as i32 && 
+                           neighbor_y >= 0 && neighbor_y < CHUNK_SIZE as i32 {
+                            let neighbor_idx = (neighbor_y as usize) * CHUNK_SIZE + (neighbor_x as usize);
+                            if neighbor_idx < voxels.len() && voxels[neighbor_idx] == VoxelType::Air {
+                                has_air_neighbor = true;
+                                break;
+                            }
+                        }
+                    }
+                    if has_air_neighbor {
+                        break;
+                    }
+                }
+                
+                // If this dirt voxel has air neighbors, it's potentially on the surface
+                if has_air_neighbor {
+                    // Additional check: make sure we're not too deep underground
+                    // Count how many solid voxels are between this position and the direction away from planet center
+                    let dir_x = dx_from_center / distance_from_center;
+                    let dir_y = dy_from_center / distance_from_center;
+                    
+                    let mut solid_count = 0;
+                    let mut found_air = false;
+                    
+                    // Sample outward from this voxel within the chunk
+                    for step in 1..=6 {
+                        let check_x = world_x + dir_x * step as f64;
+                        let check_y = world_y + dir_y * step as f64;
+                        
+                        // Convert to local chunk coordinates
+                        let local_x = ((check_x as i32) - (chunk_x * CHUNK_SIZE as i32)) as i32;
+                        let local_y = ((check_y as i32) - (chunk_y * CHUNK_SIZE as i32)) as i32;
+                        
+                        // If still within chunk bounds, check the voxel
+                        if local_x >= 0 && local_x < CHUNK_SIZE as i32 && 
+                           local_y >= 0 && local_y < CHUNK_SIZE as i32 {
+                            let check_idx = (local_y as usize) * CHUNK_SIZE + (local_x as usize);
+                            if check_idx < voxels.len() {
+                                if voxels[check_idx] == VoxelType::Air {
+                                    found_air = true;
+                                    break;
+                                } else {
+                                    solid_count += 1;
+                                }
+                            }
+                        } else {
+                            // Outside chunk bounds - stop checking
+                            break;
+                        }
+                    }
+                    
+                    // Only place grass if we have air neighbors and we're close to the surface
+                    // (not buried under many solid voxels)
+                    if found_air || solid_count <= 2 {
+                        voxels[idx] = VoxelType::Grass;
+                    }
+                }
+            }
+        }
+    }
+
     /// Determine voxel type based on terrain height and planet characteristics
-    fn determine_voxel_type(terrain_height: f64, _distance_from_center: f64, _planet_radius: f64,
+    fn determine_voxel_type(terrain_height: f64, distance_from_center: f64, planet_radius: f64,
                           world_x: f64, world_y: f64, noise: &Perlin) -> VoxelType {
         // If we're clearly outside the planet, it's space (air)
         if terrain_height < 0.02 {
             return VoxelType::Air;
+        }
+        
+        // Calculate distance ratio for core detection
+        let distance_ratio = distance_from_center / planet_radius;
+        
+        // Core region - almost perfect circle in the center
+        const CORE_RADIUS_RATIO: f64 = 0.2; // Increased to 20% for visibility
+        if distance_ratio <= CORE_RADIUS_RATIO {
+            return VoxelType::Core;
         }
         
         // Surface areas should be mostly dirt with some rock variation

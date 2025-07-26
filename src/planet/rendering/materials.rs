@@ -50,11 +50,59 @@ impl Default for DirtMaterial {
     }
 }
 
+#[derive(AsBindGroup, TypePath, Asset, Debug, Clone)]
+pub struct GrassMaterial {
+    #[uniform(0)]
+    pub color: LinearRgba,
+    #[uniform(0)]
+    pub mesh_size: Vec3,
+}
+
+impl Material2d for GrassMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/dirt_material.wgsl".into() // Reuse dirt shader for now
+    }
+}
+
+impl Default for GrassMaterial {
+    fn default() -> Self {
+        Self {
+            color: LinearRgba::rgb(0.0, 0.6, 0.0), // Green color for grass
+            mesh_size: Vec3::ONE,
+        }
+    }
+}
+
+#[derive(AsBindGroup, TypePath, Asset, Debug, Clone)]
+pub struct CoreMaterial {
+    #[uniform(0)]
+    pub color: LinearRgba,
+    #[uniform(0)]
+    pub mesh_size: Vec3,
+}
+
+impl Material2d for CoreMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/rock_material.wgsl".into() // Reuse rock shader for now
+    }
+}
+
+impl Default for CoreMaterial {
+    fn default() -> Self {
+        Self {
+            color: LinearRgba::rgb(0.1, 0.1, 0.1), // Very dark gray/black for core
+            mesh_size: Vec3::ONE,
+        }
+    }
+}
+
 pub struct PlanetMaterialPlugin;
 
 impl Plugin for PlanetMaterialPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(Material2dPlugin::<RockMaterial>::default())
-            .add_plugins(Material2dPlugin::<DirtMaterial>::default());
+            .add_plugins(Material2dPlugin::<DirtMaterial>::default())
+            .add_plugins(Material2dPlugin::<GrassMaterial>::default())
+            .add_plugins(Material2dPlugin::<CoreMaterial>::default());
     }
 }
