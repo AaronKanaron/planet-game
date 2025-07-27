@@ -114,7 +114,22 @@ impl GreedyMeshHandler {
             }
         }
 
-        true
+                // Additional check: ensure triangles form a proper quad
+        // We expect two triangles that together cover the full square
+        let triangle_area: f32 = mesh.triangles.iter()
+            .map(|tri| {
+                let v0 = mesh.vertices[tri[0] as usize];
+                let v1 = mesh.vertices[tri[1] as usize];
+                let v2 = mesh.vertices[tri[2] as usize];
+                // Calculate triangle area using cross product
+                let edge1 = v1 - v0;
+                let edge2 = v2 - v0;
+                (edge1.x * edge2.y - edge1.y * edge2.x).abs() * 0.5
+            })
+            .sum();
+        
+        // Total area should be close to 1.0 (unit square)
+        (triangle_area - 1.0).abs() < 0.001
     }
 
     /// Add a greedy quad to the mesh, aka. a bigger rectangle.

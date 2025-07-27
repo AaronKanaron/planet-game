@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::planet::{
-    meshing::mesh_renderer::VOXEL_SIZE,
+    meshing::{mesh_renderer::VOXEL_SIZE, greedy_mesh::GreedyMeshHandler},
     world::{chunk_world::World, voxel::VoxelType},
 };
 
@@ -39,6 +39,7 @@ impl DualContourer {
 
         // Generate dual contour mesh data for this chunk
         let mut complex_meshes = Vec::new();
+        let mut mesh_quads = Vec::new();
 
         // Generate cells for this chunk, including boundary cells for seamless connection
         // We need to generate cells for the boundaries to ensure seamless edges
@@ -57,40 +58,36 @@ impl DualContourer {
 
                     if let Some(cell_mesh) =
                         Self::generate_cell_mesh(cell, world_x as f32, world_y as f32)
-                    {
-                        // For now, disable greedy meshing to focus on SDF dual contouring
-                        // TODO: Re-enable greedy meshing for SDF-based full cells
-                        complex_meshes.push(cell_mesh);
-                        
+                    {                        
                         // Check if this is a simple full quad that can be greedy meshed
-                        // if GreedyMeshHandler::is_full_quad_mesh(
-                        //     &cell_mesh,
-                        //     world_x as f32,
-                        //     world_y as f32,
-                        // ) {
-                        //     mesh_quads.push((world_x, world_y));
-                        // } else {
-                        //     // Complex shapes go directly into the final mesh
-                        //     complex_meshes.push(cell_mesh);
-                        // }
+                        if GreedyMeshHandler::is_full_quad_mesh(
+                            &cell_mesh,
+                            world_x as f32,
+                            world_y as f32,
+                        ) {
+                            mesh_quads.push((world_x, world_y));
+                        } else {
+                            // Complex shapes go directly into the final mesh
+                            complex_meshes.push(cell_mesh);
+                        }
                     }
                 }
             }
         }
 
         // Apply greedy meshing to full quads within this chunk (disabled for SDF)
-        // let greedy_quads = GreedyMeshHandler::greedy_mesh_quads(
-        //     &mesh_quads,
-        //     world_min_x,
-        //     world_min_y,
-        //     world_max_x,
-        //     world_max_y,
-        // );
+        let greedy_quads = GreedyMeshHandler::greedy_mesh_quads(
+            &mesh_quads,
+            world_min_x,
+            world_min_y,
+            world_max_x,
+            world_max_y,
+        );
 
         // Add greedy meshed quads to the final mesh (disabled for SDF)
-        // for quad in greedy_quads {
-        //     GreedyMeshHandler::add_quad_to_mesh(&mut vertices, &mut indices, quad);
-        // }
+        for quad in greedy_quads {
+            GreedyMeshHandler::add_quad_to_mesh(&mut vertices, &mut indices, quad);
+        }
 
         // Add complex meshes to the final mesh
         for cell_mesh in complex_meshes {
@@ -121,7 +118,7 @@ impl DualContourer {
     ) -> CellConfiguration {
         let chunk_size = World::chunk_size() as i32;
 
-        // Helper function to safely get SDF value, defaulting to positive (air) if chunk not loaded
+        // Helper function to safely get SDF value, with intelligent defaults for chunk boundaries
         let safe_get_sdf = |vx: i32, vy: i32| -> f32 {
             let chunk_x = vx.div_euclid(chunk_size);
             let chunk_y = vy.div_euclid(chunk_size);
@@ -135,7 +132,39 @@ impl DualContourer {
                     sdf.distance.abs() // Make positive for non-target material
                 }
             } else {
-                1.0 // Default to positive (air) for missing chunks
+                // For missing chunks, try to make a reasonable assumption
+                // Check if the current cell's chunk has the target material at the boundary
+                // and assume continuity across chunk boundaries
+
+                let current_chunk_x = x.div_euclid(chunk_size);
+                let current_chunk_y = y.div_euclid(chunk_size);
+
+                if world.is_chunk_loaded(current_chunk_x, current_chunk_y) {
+                    let boundary_x = if vx < current_chunk_x * chunk_size {
+                        current_chunk_x * chunk_size
+                    } else if vx >= (current_chunk_x + 1) * chunk_size {
+                        (current_chunk_x + 1) * chunk_size - 1
+                    } else {
+                        vx
+                    };
+
+                    let boundary_y = if vy < current_chunk_y * chunk_size {
+                        current_chunk_y * chunk_size
+                    } else if vy >= (current_chunk_y + 1) * chunk_size {
+                        (current_chunk_y + 1) * chunk_size - 1
+                    } else {
+                        vy
+                    };
+
+                    let boundary_sdf = world.get_voxel_sdf(boundary_x, boundary_y);
+                    if boundary_sdf.get_material() == target_type {
+                        -boundary_sdf.distance.abs() // Assume continuity
+                    } else {
+                        boundary_sdf.distance.abs()
+                    }
+                } else {
+                    1.0
+                }
             }
         };
 
