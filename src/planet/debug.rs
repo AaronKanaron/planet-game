@@ -8,6 +8,9 @@ pub struct DebugState {
     pub wireframe_enabled: bool,
     pub chunk_boundaries_enabled: bool,
     pub total_triangles: usize,
+    pub chunks_updated_last_5s: usize,
+    pub chunk_update_timestamps: Vec<f32>,
+    pub current_dirty_chunks: usize,
 }
 
 impl Default for DebugState {
@@ -16,6 +19,9 @@ impl Default for DebugState {
             wireframe_enabled: false,
             chunk_boundaries_enabled: false,
             total_triangles: 0,
+            chunks_updated_last_5s: 0,
+            chunk_update_timestamps: Vec::new(),
+            current_dirty_chunks: 0,
         }
     }
 }
@@ -78,7 +84,7 @@ pub fn update_debug_info(
         };
 
         **text = format!(
-            "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nEnabled: {}\nChunk Range: ({}, {}) to ({}, {})\nTriangles: {}\nWireframe: {}\nChunk Boundaries: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nF1 - Toggle wireframe\nF2 - Toggle chunk boundaries",
+            "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nEnabled: {}\nChunk Range: ({}, {}) to ({}, {})\nTriangles: {}\nChunk Updates: Active: {}, Updated: {} (last 5s)\nWireframe: {}\nChunk Boundaries: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nF1 - Toggle wireframe\nF2 - Toggle chunk boundaries",
             chunk_world.loaded_chunk_count(),
             expected_chunks,
             culling_box.center.x,
@@ -92,6 +98,8 @@ pub fn update_debug_info(
             max_chunk_x,
             max_chunk_y,
             debug_state.total_triangles,
+            debug_state.current_dirty_chunks,
+            debug_state.chunks_updated_last_5s,
             if debug_state.wireframe_enabled { "ON" } else { "OFF" },
             if debug_state.chunk_boundaries_enabled { "ON" } else { "OFF" }
         );
@@ -227,4 +235,32 @@ pub fn create_chunk_boundaries(
             },
         ));
     }
+}
+
+/// System to track chunk updates for debugging
+pub fn track_chunk_updates(
+    chunk_world: Res<World>,
+    time: Res<Time>,
+    mut debug_state: ResMut<DebugState>,
+) {
+    let current_time = time.elapsed_secs();
+    
+    // Update current dirty chunks count (real-time)
+    debug_state.current_dirty_chunks = chunk_world.get_dirty_chunks().len();
+    
+    // If we have dirty chunks, record this timestamp for the "updated in last 5s" metric
+    if debug_state.current_dirty_chunks > 0 {
+        // Add timestamp for each dirty chunk (so we count them all)
+        for _ in 0..debug_state.current_dirty_chunks {
+            debug_state.chunk_update_timestamps.push(current_time);
+        }
+    }
+    
+    // Clean up old timestamps (remove any older than 5 seconds)
+    debug_state.chunk_update_timestamps.retain(|&timestamp| {
+        current_time - timestamp <= 5.0
+    });
+    
+    // Update the count of chunks updated in the last 5 seconds
+    debug_state.chunks_updated_last_5s = debug_state.chunk_update_timestamps.len();
 }

@@ -2,7 +2,7 @@ use crate::planet::{
     debug::{
         setup_debug_ui, update_debug_info, debug_input_system, 
         toggle_wireframe_visibility, toggle_chunk_boundary_visibility,
-        create_chunk_boundaries, update_triangle_count, DebugState
+        create_chunk_boundaries, update_triangle_count, track_chunk_updates, DebugState
     },
     meshing::mesh_renderer::{MeshRenderer, VOXEL_SIZE},
     rendering::{
@@ -56,6 +56,7 @@ impl Plugin for PlanetPlugin {
                 Update,
                 (
                     chunk_culling_system,
+                    track_chunk_updates,  // Move this BEFORE mesh rendering
                     MeshRenderer::cleanup_unloaded_chunks,
                     MeshRenderer::render_mesh,
                     update_triangle_count,
