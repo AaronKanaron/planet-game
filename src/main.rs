@@ -31,7 +31,7 @@ fn main() {
         .add_plugins(PlanetPlugin)
         // .add_plugins(CameraPlugin)
         .add_systems(Startup, setup)
-        .add_systems(Update, (handle_input, follow_culling_center))
+        .add_systems(Update, (handle_input, follow_culling_center, handle_zoom))
         .run();
 }
 
@@ -94,5 +94,26 @@ fn follow_culling_center(
     if culling_box.is_changed() {
         camera_transform.translation.x = culling_box.center.x;
         camera_transform.translation.y = culling_box.center.y;
+    }
+}
+
+fn handle_zoom(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut projection: Single<&mut Projection, With<Camera>>,
+) {
+    let Projection::Orthographic(projection) = &mut **projection else {
+        return;
+    };
+
+    let zoom_factor = 1.2;
+    let min_scale = 0.1;
+    let max_scale = 70.0;
+
+    if keyboard_input.just_pressed(KeyCode::KeyI) {
+        // Zoom in: decrease scale
+        projection.scale = (projection.scale / zoom_factor).max(min_scale);
+    } else if keyboard_input.just_pressed(KeyCode::KeyO) {
+        // Zoom out: increase scale
+        projection.scale = (projection.scale * zoom_factor).min(max_scale);
     }
 }
