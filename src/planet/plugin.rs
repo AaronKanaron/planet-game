@@ -1,5 +1,9 @@
 use crate::planet::{
-    debug::{setup_debug_ui, update_debug_info},
+    debug::{
+        DebugState, create_chunk_boundaries, debug_input_system, setup_debug_ui,
+        toggle_chunk_boundary_visibility, toggle_wireframe_visibility, track_chunk_updates,
+        update_debug_info, update_triangle_count,
+    },
     meshing::mesh_renderer::{MeshRenderer, VOXEL_SIZE},
     rendering::{
         culling::ChunkCullingBox,
@@ -38,6 +42,9 @@ impl PlanetPlugin {
                 VOXEL_SIZE * CHUNK_SIZE as f32,
             ), // 2x2 chunks
         ));
+
+        // Initialize debug state resource
+        commands.insert_resource(DebugState::default());
     }
 }
 
@@ -49,10 +56,16 @@ impl Plugin for PlanetPlugin {
                 Update,
                 (
                     chunk_culling_system,
+                    track_chunk_updates, // Move this BEFORE mesh rendering
                     MeshRenderer::cleanup_unloaded_chunks,
                     MeshRenderer::render_mesh,
+                    update_triangle_count,
                     draw_culling_box_gizmo,
                     culling_box_input_system,
+                    debug_input_system,
+                    toggle_wireframe_visibility,
+                    toggle_chunk_boundary_visibility,
+                    create_chunk_boundaries,
                     update_debug_info,
                 )
                     .chain(),

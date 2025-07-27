@@ -5,6 +5,7 @@ use bevy::{
 };
 
 use crate::planet::{
+    debug::{DebugState, TriangleCount},
     meshing::dual_contourer::DualContourer,
     rendering::materials::{CoreMaterial, DirtMaterial, GrassMaterial, RockMaterial},
     world::{
@@ -15,13 +16,18 @@ use crate::planet::{
 
 /// Voxel size in world units
 pub const VOXEL_SIZE: f32 = 6.0;
-const WIREFRAME_MODE: bool = false;
 
 #[derive(Component)]
 pub struct ChunkMesh {
     pub chunk_x: i32,
     pub chunk_y: i32,
 }
+
+#[derive(Component)]
+pub struct WireframeMesh;
+
+#[derive(Component)]
+pub struct ChunkBoundary;
 
 pub struct MeshRenderer;
 
@@ -43,6 +49,7 @@ impl MeshRenderer {
     pub fn render_mesh(
         mut commands: Commands,
         mut world: ResMut<World>,
+        debug_state: Res<DebugState>,
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<ColorMaterial>>,
         mut rock_materials: ResMut<Assets<RockMaterial>>,
@@ -79,6 +86,7 @@ impl MeshRenderer {
                 let (vertices, indices) =
                     DualContourer::generate_chunk_mesh(&world, chunk_x, chunk_y, material_type);
                 if !vertices.is_empty() && !indices.is_empty() {
+                    let triangle_count = indices.len() / 3;
                     let mut filled_mesh = Mesh::new(
                         PrimitiveTopology::TriangleList,
                         RenderAssetUsages::RENDER_WORLD,
@@ -108,6 +116,7 @@ impl MeshRenderer {
                                 Transform::default(),
                                 Voxel,
                                 ChunkMesh { chunk_x, chunk_y },
+                                TriangleCount(triangle_count),
                             ));
                         }
                         VoxelType::Dirt => {
@@ -121,6 +130,7 @@ impl MeshRenderer {
                                 Transform::default(),
                                 Voxel,
                                 ChunkMesh { chunk_x, chunk_y },
+                                TriangleCount(triangle_count),
                             ));
                         }
                         VoxelType::Grass => {
@@ -134,6 +144,7 @@ impl MeshRenderer {
                                 Transform::default(),
                                 Voxel,
                                 ChunkMesh { chunk_x, chunk_y },
+                                TriangleCount(triangle_count),
                             ));
                         }
                         VoxelType::Core => {
@@ -147,6 +158,7 @@ impl MeshRenderer {
                                 Transform::default(),
                                 Voxel,
                                 ChunkMesh { chunk_x, chunk_y },
+                                TriangleCount(triangle_count),
                             ));
                         }
                         VoxelType::Air => {
@@ -154,19 +166,19 @@ impl MeshRenderer {
                         }
                     }
 
-                    // Create wireframe mesh
-                    if WIREFRAME_MODE {
-                        Self::spawn_wireframe_mesh(
-                            &mut commands,
-                            &mut meshes,
-                            &mut materials,
-                            vertices,
-                            normals,
-                            indices,
-                            chunk_x,
-                            chunk_y,
-                        );
-                    }
+                    // Always create wireframe mesh but with appropriate visibility
+                    Self::spawn_wireframe_mesh(
+                        &mut commands,
+                        &mut meshes,
+                        &mut materials,
+                        vertices,
+                        normals,
+                        indices,
+                        chunk_x,
+                        chunk_y,
+                        debug_state.wireframe_enabled,
+                        triangle_count,
+                    );
                 }
             }
 
@@ -209,6 +221,8 @@ impl MeshRenderer {
         indices: Vec<u32>,
         chunk_x: i32,
         chunk_y: i32,
+        visible: bool,
+        triangle_count: usize,
     ) {
         let wireframe_indices = Self::generate_wireframe_indices(&indices);
 
@@ -227,6 +241,13 @@ impl MeshRenderer {
                 Transform::from_xyz(0.0, 0.0, 0.1), // Slightly in front
                 Voxel,
                 ChunkMesh { chunk_x, chunk_y },
+                WireframeMesh,
+                TriangleCount(triangle_count),
+                if visible {
+                    Visibility::Visible
+                } else {
+                    Visibility::Hidden
+                },
             ));
         }
     }
