@@ -1,11 +1,12 @@
-use crate::planet::world::voxel::VoxelType;
+use crate::planet::world::voxel::{VoxelSDF, VoxelType};
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
 
 pub const CHUNK_SIZE: usize = 16;
 
 pub struct Chunk {
-    voxels: Vec<VoxelType>,
+    // Changed from VoxelType to VoxelSDF
+    voxels: Vec<VoxelSDF>,
 
     /// Whether this chunk needs to be re-meshed
     dirty: bool,
@@ -15,14 +16,14 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    /// Generate a new chunk with multi-scale noise for a circular planet
+    /// Generate a new chunk with SDF values for a circular planet
     pub fn generate(cx: i32, cy: i32, noise: &Perlin) -> Chunk {
         let mut voxels = Vec::with_capacity(CHUNK_SIZE * CHUNK_SIZE);
 
         // Planet parameters
         const PLANET_CENTER_X: f64 = 0.0;
         const PLANET_CENTER_Y: f64 = 0.0;
-        const PLANET_RADIUS: f64 = 300.0; // More reasonable planet size
+        const PLANET_RADIUS: f64 = 300.0;
 
         for dy in 0..CHUNK_SIZE {
             for dx in 0..CHUNK_SIZE {
@@ -35,8 +36,8 @@ impl Chunk {
                     + (world_y - PLANET_CENTER_Y).powi(2))
                 .sqrt();
 
-                // Sample multi-scale terrain height
-                let terrain_height = Self::sample_planet_terrain(
+                // Sample terrain surface distance using noise
+                let surface_distance = Self::sample_planet_surface_distance(
                     world_x,
                     world_y,
                     distance_from_center,
@@ -44,41 +45,196 @@ impl Chunk {
                     noise,
                 );
 
-                // Check for caves
-                let is_cave = Self::sample_cave_system(
+                // Sample cave system to modify the SDF
+                let cave_distance = Self::sample_cave_sdf(
                     world_x,
                     world_y,
                     distance_from_center,
                     PLANET_RADIUS,
-                    terrain_height,
+                    surface_distance,
                     noise,
                 );
 
-                // Determine voxel type based on terrain height, distance, and caves
-                let voxel = if is_cave {
-                    VoxelType::Air
-                } else {
-                    Self::determine_voxel_type(
-                        terrain_height,
-                        distance_from_center,
-                        PLANET_RADIUS,
-                        world_x,
-                        world_y,
-                        noise,
-                    )
-                };
+                // Combine surface and cave distances (union operation)
+                let final_distance = surface_distance.max(cave_distance);
 
-                voxels.push(voxel);
+                // Determine material type based on depth and location
+                let material = Self::determine_material_from_sdf(
+                    final_distance,
+                    distance_from_center,
+                    PLANET_RADIUS,
+                    world_x,
+                    world_y,
+                    noise,
+                );
+
+                // Create SDF voxel
+                let voxel_sdf = VoxelSDF::new(final_distance, material);
+                voxels.push(voxel_sdf);
             }
         }
 
-        // Post-process to add grass on surface
-        Self::add_surface_grass(&mut voxels, cx, cy);
+        // TODO: Update surface grass logic for SDF
+        // Self::add_surface_grass(&mut voxels, cx, cy);
 
         Chunk {
             voxels,
             dirty: true,
             modified: false,
+        }
+    }
+
+    /// Sample planet surface as a signed distance field
+    /// Returns negative values inside the planet, positive outside
+    fn sample_planet_surface_distance(
+        world_x: f64,
+        world_y: f64,
+        distance_from_center: f64,
+        planet_radius: f64,
+        noise: &Perlin,
+    ) -> f32 {
+        // Base distance to sphere
+        let base_distance = distance_from_center - planet_radius;
+
+        // Sample multi-scale terrain for surface displacement
+        let terrain_displacement = Self::sample_terrain_displacement(
+            world_x,
+            world_y,
+            distance_from_center,
+            planet_radius,
+            noise,
+        );
+
+        // Apply displacement to create terrain variation
+        (base_distance - terrain_displacement) as f32
+    }
+
+    /// Sample terrain displacement for surface variation
+    fn sample_terrain_displacement(
+        world_x: f64,
+        world_y: f64,
+        distance_from_center: f64,
+        planet_radius: f64,
+        noise: &Perlin,
+    ) -> f64 {
+        let distance_ratio = distance_from_center / planet_radius;
+
+        // Reduce displacement far from planet
+        let falloff = if distance_ratio < 1.5 {
+            (1.5 - distance_ratio).max(0.0)
+        } else {
+            0.0
+        };
+
+        // Continental scale noise
+        let continental_scale = 8000.0;
+        let continental_noise =
+            noise.get([world_x / continental_scale, world_y / continental_scale]) * 50.0;
+
+        // Regional scale noise (mountains, valleys)
+        let regional_scale = 2000.0;
+        let regional_noise = noise.get([
+            world_x / regional_scale + 100.0,
+            world_y / regional_scale + 100.0,
+        ]) * 30.0;
+
+        // Local detail noise
+        let local_scale = 500.0;
+        let local_noise =
+            noise.get([world_x / local_scale + 200.0, world_y / local_scale + 200.0]) * 15.0;
+
+        // Fine detail noise
+        let detail_scale = 100.0;
+        let detail_noise = noise.get([
+            world_x / detail_scale + 300.0,
+            world_y / detail_scale + 300.0,
+        ]) * 5.0;
+
+        // Surface roughness
+        let surface_scale = 50.0;
+        let surface_noise = noise.get([
+            world_x / surface_scale + 400.0,
+            world_y / surface_scale + 400.0,
+        ]) * 2.0;
+
+        let total_displacement =
+            continental_noise + regional_noise + local_noise + detail_noise + surface_noise;
+        total_displacement * falloff
+    }
+
+    /// Sample cave system as SDF (returns positive values inside caves)
+    fn sample_cave_sdf(
+        world_x: f64,
+        world_y: f64,
+        distance_from_center: f64,
+        planet_radius: f64,
+        surface_distance: f32,
+        noise: &Perlin,
+    ) -> f32 {
+        // Only generate caves inside the planet
+        if surface_distance > 0.0 {
+            return f32::NEG_INFINITY; // No caves in air
+        }
+
+        let distance_ratio = distance_from_center / planet_radius;
+
+        // Don't generate caves in core or too close to surface
+        if distance_ratio < 0.3 || distance_ratio > 0.9 {
+            return f32::NEG_INFINITY;
+        }
+
+        // Cave tunnel noise
+        let cave_scale = 200.0;
+        let cave_noise1 = noise.get([world_x / cave_scale + 1000.0, world_y / cave_scale + 1000.0]);
+        let cave_noise2 = noise.get([world_x / cave_scale + 2000.0, world_y / cave_scale + 2000.0]);
+
+        // Create cave tunnels using noise
+        let cave_value = (cave_noise1.abs() + cave_noise2.abs()) * 0.5;
+        let cave_threshold = 0.15; // Adjust for cave density
+
+        if cave_value < cave_threshold {
+            let cave_radius = 8.0; // Cave tunnel radius
+            let distance_to_cave_center =
+                (cave_threshold - cave_value) / cave_threshold * cave_radius;
+            distance_to_cave_center as f32
+        } else {
+            f32::NEG_INFINITY
+        }
+    }
+
+    /// Determine material type from SDF value and position
+    fn determine_material_from_sdf(
+        distance: f32,
+        distance_from_center: f64,
+        planet_radius: f64,
+        world_x: f64,
+        world_y: f64,
+        noise: &Perlin,
+    ) -> VoxelType {
+        if distance > 0.0 {
+            return VoxelType::Air;
+        }
+
+        let distance_ratio = distance_from_center / planet_radius;
+        let depth = -distance; // How deep inside the planet
+
+        // Core region
+        if distance_ratio < 0.15 {
+            return VoxelType::Core;
+        }
+
+        // Rock layer (deep)
+        if depth > 20.0 || distance_ratio < 0.4 {
+            return VoxelType::Rock;
+        }
+
+        // Surface materials
+        let surface_noise = noise.get([world_x / 100.0 + 500.0, world_y / 100.0 + 500.0]);
+
+        if depth < 3.0 && surface_noise > 0.1 {
+            VoxelType::Grass
+        } else {
+            VoxelType::Dirt
         }
     }
 
@@ -417,9 +573,15 @@ impl Chunk {
 
         if idx < self.voxels.len() {
             let old_voxel = self.voxels[idx];
-            self.voxels[idx] = vtype;
+            // Create new SDF voxel, preserving distance but changing material
+            let new_distance = if vtype == VoxelType::Air {
+                old_voxel.distance.abs() // Make positive for air
+            } else {
+                -old_voxel.distance.abs() // Make negative for solid
+            };
+            self.voxels[idx] = VoxelSDF::new(new_distance, vtype);
 
-            let is_changed = old_voxel != vtype;
+            let is_changed = old_voxel.material != vtype;
             if is_changed {
                 self.dirty = true;
                 self.modified = true;
@@ -431,9 +593,20 @@ impl Chunk {
         let idx = y * CHUNK_SIZE + x;
 
         if idx < self.voxels.len() {
-            self.voxels[idx]
+            self.voxels[idx].get_material()
         } else {
             VoxelType::Air
+        }
+    }
+
+    /// Get SDF value at the given position
+    pub fn get_voxel_sdf(&self, x: usize, y: usize) -> VoxelSDF {
+        let idx = y * CHUNK_SIZE + x;
+
+        if idx < self.voxels.len() {
+            self.voxels[idx]
+        } else {
+            VoxelSDF::air(1.0) // Default to air with positive distance
         }
     }
 

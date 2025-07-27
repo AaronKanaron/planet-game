@@ -8,6 +8,7 @@ use bevy::window::WindowPlugin;
 
 use crate::camera::CameraPlugin;
 use crate::planet::plugin::PlanetPlugin;
+use crate::planet::rendering::culling::ChunkCullingBox;
 use crate::planet::world::chunk_world::World;
 use crate::planet::{meshing::mesh_renderer::VOXEL_SIZE, world::voxel::VoxelType};
 use crate::utils::debug::plugin::DebugPlugin;
@@ -28,9 +29,9 @@ fn main() {
         )
         .add_plugins(DebugPlugin)
         .add_plugins(PlanetPlugin)
-        .add_plugins(CameraPlugin)
-        // .add_systems(Startup, setup)
-        .add_systems(Update, handle_input)
+        // .add_plugins(CameraPlugin)
+        .add_systems(Startup, setup)
+        .add_systems(Update, (handle_input, follow_culling_center))
         .run();
 }
 
@@ -82,5 +83,16 @@ fn handle_input(
         world.set_voxel(voxel_x + 1, voxel_y, VoxelType::Air);
         world.set_voxel(voxel_x + 1, voxel_y + 1, VoxelType::Air);
         world.set_voxel(voxel_x, voxel_y + 1, VoxelType::Air);
+    }
+}
+
+//camera follow
+fn follow_culling_center(
+    mut camera_transform: Single<&mut Transform, With<Camera>>,
+    culling_box: Res<ChunkCullingBox>,
+) {
+    if culling_box.is_changed() {
+        camera_transform.translation.x = culling_box.center.x;
+        camera_transform.translation.y = culling_box.center.y;
     }
 }

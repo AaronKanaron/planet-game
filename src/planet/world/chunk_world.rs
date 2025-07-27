@@ -1,7 +1,7 @@
 use crate::planet::rendering::culling::ChunkCullingBox;
 use crate::planet::world::{
     chunk::{CHUNK_SIZE, Chunk},
-    voxel::VoxelType,
+    voxel::{VoxelSDF, VoxelType},
 };
 use bevy::{platform::collections::HashMap, prelude::*};
 use noise::Perlin;
@@ -33,6 +33,21 @@ impl World {
             chunk.get_voxel(local_x as usize, local_y as usize)
         } else {
             VoxelType::Air // Or trigger chunk generation
+        }
+    }
+
+    /// Get SDF value at world coordinates
+    pub fn get_voxel_sdf(&self, x: i32, y: i32) -> VoxelSDF {
+        let chunk_x = x.div_euclid(CHUNK_SIZE as i32);
+        let chunk_y = y.div_euclid(CHUNK_SIZE as i32);
+        let local_x = x.rem_euclid(CHUNK_SIZE as i32);
+        let local_y = y.rem_euclid(CHUNK_SIZE as i32);
+
+        // Look up the chunk
+        if let Some(chunk) = self.loaded_chunks.get(&(chunk_x, chunk_y)) {
+            chunk.get_voxel_sdf(local_x as usize, local_y as usize)
+        } else {
+            VoxelSDF::air(1.0) // Default to air for missing chunks
         }
     }
 
