@@ -76,13 +76,6 @@ impl MeshRenderer {
             ] {
                 let (vertices, indices) =
                     DualContourer::generate_chunk_mesh(&world, chunk_x, chunk_y, material_type);
-                
-                // Debug mesh generation
-                if !vertices.is_empty() {
-                    println!("Generated mesh for {:?} at chunk ({}, {}) with {} vertices, {} indices", 
-                            material_type, chunk_x, chunk_y, vertices.len(), indices.len());
-                }
-                
                 if !vertices.is_empty() && !indices.is_empty() {
                     let mut filled_mesh = Mesh::new(
                         PrimitiveTopology::TriangleList,

@@ -142,11 +142,11 @@ pub fn culling_box_input_system(
     // Padding controls (B/N keys)
     if keyboard_input.pressed(KeyCode::KeyB) {
         culling_box.padding += padding_speed * delta_time;
-        info!("Culling padding increased to: {:.1}", culling_box.padding);
+        // info!("Culling padding increased to: {:.1}", culling_box.padding);
     }
     if keyboard_input.pressed(KeyCode::KeyN) {
         culling_box.padding = (culling_box.padding - padding_speed * delta_time).max(0.0);
-        info!("Culling padding decreased to: {:.1}", culling_box.padding);
+        // info!("Culling padding decreased to: {:.1}", culling_box.padding);
     }
 
     // Toggle culling box (Space key)
