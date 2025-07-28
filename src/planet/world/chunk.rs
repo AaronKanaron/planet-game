@@ -84,10 +84,6 @@ impl Chunk {
                         surface_distance
                     };
                     
-                    // Debug cave generation for a few chunks
-                    if dx == 0 && dy == 0 && (cx.abs() <= 2 && cy.abs() <= 2) && cave_distance < 0.0 {
-                        let air_distance = -cave_distance;
-                    }
                     
                     combined
                 } else {
