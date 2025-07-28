@@ -1,16 +1,14 @@
 use crate::planet::{
     debug::{
-        DebugState, create_chunk_boundaries, debug_input_system, setup_debug_ui,
-        toggle_chunk_boundary_visibility, toggle_wireframe_visibility, track_chunk_updates,
-        update_debug_info, update_triangle_count,
+        DebugState, debug_input_system, setup_debug_ui, update_debug_info,
     },
-    meshing::mesh_renderer::{MeshRenderer, VOXEL_SIZE},
+    meshing::mesh_renderer::{MeshRenderer},
     rendering::{
         culling::ChunkCullingBox,
         culling_system::{chunk_culling_system, culling_box_input_system, draw_culling_box_gizmo},
         materials::PlanetMaterialPlugin,
     },
-    world::{chunk::CHUNK_SIZE, chunk::Chunk, chunk_world::World},
+    world::{chunk::Chunk, chunk_world::World},
 };
 
 use bevy::prelude::*;
@@ -34,14 +32,10 @@ impl PlanetPlugin {
 
         commands.insert_resource(world);
 
-        // Initialize the culling box resource
-        commands.insert_resource(ChunkCullingBox::new(
-            Vec2::new(0.0, 0.0), // Center at origin
-            Vec2::new(
-                VOXEL_SIZE * CHUNK_SIZE as f32,
-                VOXEL_SIZE * CHUNK_SIZE as f32,
-            ), // 2x2 chunks
-        ));
+        // Initialize the culling box resource - start close to planet surface
+        // Position the culling box closer to the planet surface to see terrain details
+        let culling_box = ChunkCullingBox::new(Vec2::new(280.0, 0.0), Vec2::new(100.0, 100.0));
+        commands.insert_resource(culling_box);
 
         // Initialize debug state resource
         commands.insert_resource(DebugState::default());
@@ -56,16 +50,11 @@ impl Plugin for PlanetPlugin {
                 Update,
                 (
                     chunk_culling_system,
-                    track_chunk_updates, // Move this BEFORE mesh rendering
                     MeshRenderer::cleanup_unloaded_chunks,
                     MeshRenderer::render_mesh,
-                    update_triangle_count,
                     draw_culling_box_gizmo,
                     culling_box_input_system,
                     debug_input_system,
-                    toggle_wireframe_visibility,
-                    toggle_chunk_boundary_visibility,
-                    create_chunk_boundaries,
                     update_debug_info,
                 )
                     .chain(),

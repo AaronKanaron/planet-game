@@ -55,12 +55,9 @@ impl VoxelSDF {
         self.distance > 0.0
     }
 
-    /// Get the material type, defaulting to Air if distance is positive
+    /// Get the material type
+    /// Uses the stored material directly since we set it correctly during chunk generation
     pub fn get_material(&self) -> VoxelType {
-        if self.is_solid() {
-            self.material
-        } else {
-            VoxelType::Air
-        }
+        self.material
     }
 }

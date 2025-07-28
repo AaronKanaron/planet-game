@@ -17,9 +17,9 @@ pub struct ChunkCullingBox {
 impl Default for ChunkCullingBox {
     fn default() -> Self {
         Self {
-            center: Vec2::ZERO,
-            half_extents: Vec2::new(200.0, 200.0), // Default 400x400 world units
-            padding: 50.0,                         // Default padding
+            center: Vec2::new(295.0, 0.0), // Very close to planet surface (radius=300)
+            half_extents: Vec2::new(50.0, 50.0), // Smaller view area to focus on surface
+            padding: 20.0,                         // Smaller padding
             enabled: true,
         }
     }

@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::planet::{
-    meshing::{greedy_mesh::GreedyMeshHandler, mesh_renderer::VOXEL_SIZE},
+    meshing::mesh_renderer::VOXEL_SIZE,
     world::{chunk_world::World, voxel::VoxelType},
 };
 
@@ -39,7 +39,6 @@ impl DualContourer {
 
         // Generate dual contour mesh data for this chunk
         let mut complex_meshes = Vec::new();
-        let mut mesh_quads = Vec::new();
 
         // Generate cells for this chunk, including boundary cells for seamless connection
         // We need to generate cells for the boundaries to ensure seamless edges
@@ -52,42 +51,28 @@ impl DualContourer {
 
                 // Only process cells that belong to this chunk
                 if cell_chunk_x == chunk_x && cell_chunk_y == chunk_y {
-                    // Try to create cells even if neighbors aren't loaded
-                    // For boundary cells, we'll use Air as default for missing voxels
-                    let cell = Self::get_cell_configuration(world, world_x, world_y, target_type);
-
-                    if let Some(cell_mesh) =
-                        Self::generate_cell_mesh(cell, world_x as f32, world_y as f32)
-                    {
-                        // Check if this is a simple full quad that can be greedy meshed
-                        if GreedyMeshHandler::is_full_quad_mesh(
-                            &cell_mesh,
-                            world_x as f32,
-                            world_y as f32,
-                        ) {
-                            mesh_quads.push((world_x, world_y));
-                        } else {
-                            // Complex shapes go directly into the final mesh
-                            complex_meshes.push(cell_mesh);
-                        }
+                    // For SDF-based terrain, skip the old discrete voxel approach
+                    // Instead, directly generate smooth surface mesh using SDF sampling
+                    if let Some(cell_mesh) = Self::generate_sdf_cell_mesh(world, world_x, world_y, target_type) {
+                        complex_meshes.push(cell_mesh);
                     }
                 }
             }
         }
 
-        // Apply greedy meshing to full quads within this chunk (disabled for SDF)
-        let greedy_quads = GreedyMeshHandler::greedy_mesh_quads(
-            &mesh_quads,
-            world_min_x,
-            world_min_y,
-            world_max_x,
-            world_max_y,
-        );
+        // Disable greedy meshing for SDF-based terrain to preserve smooth surfaces
+        // let greedy_quads = GreedyMeshHandler::greedy_mesh_quads(
+        //     &mesh_quads,
+        //     world_min_x,
+        //     world_min_y,
+        //     world_max_x,
+        //     world_max_y,
+        // );
 
         // Add greedy meshed quads to the final mesh (disabled for SDF)
-        for quad in greedy_quads {
-            GreedyMeshHandler::add_quad_to_mesh(&mut vertices, &mut indices, quad);
-        }
+        // for quad in greedy_quads {
+        //     GreedyMeshHandler::add_quad_to_mesh(&mut vertices, &mut indices, quad);
+        // }
 
         // Add complex meshes to the final mesh
         for cell_mesh in complex_meshes {
@@ -177,292 +162,6 @@ impl DualContourer {
             ],
         }
     }
-
-    fn create_full_quad(cell_x: f32, cell_y: f32) -> CellMesh {
-        let base_x = cell_x;
-        let base_y = cell_y;
-
-        CellMesh {
-            vertices: vec![
-                Vec2::new(base_x, base_y),
-                Vec2::new(base_x + 1.0, base_y),
-                Vec2::new(base_x + 1.0, base_y + 1.0),
-                Vec2::new(base_x, base_y + 1.0),
-            ],
-            triangles: vec![[0, 1, 2], [0, 2, 3]],
-        }
-    }
-
-    fn create_corner_mesh(cell_x: f32, cell_y: f32, corner: usize) -> CellMesh {
-        let base_x = cell_x;
-        let base_y = cell_y;
-
-        match corner {
-            0 => CellMesh {
-                // bottom-left
-                vertices: vec![
-                    Vec2::new(base_x, base_y),
-                    Vec2::new(base_x + 0.5, base_y),
-                    Vec2::new(base_x, base_y + 0.5),
-                ],
-                triangles: vec![[0, 1, 2]],
-            },
-            1 => CellMesh {
-                // bottom-right
-                vertices: vec![
-                    Vec2::new(base_x + 1.0, base_y),
-                    Vec2::new(base_x + 0.5, base_y),
-                    Vec2::new(base_x + 1.0, base_y + 0.5),
-                ],
-                triangles: vec![[0, 1, 2]],
-            },
-            2 => CellMesh {
-                // top-right
-                vertices: vec![
-                    Vec2::new(base_x + 1.0, base_y + 1.0),
-                    Vec2::new(base_x + 1.0, base_y + 0.5),
-                    Vec2::new(base_x + 0.5, base_y + 1.0),
-                ],
-                triangles: vec![[0, 1, 2]],
-            },
-            3 => CellMesh {
-                // top-left
-                vertices: vec![
-                    Vec2::new(base_x, base_y + 1.0),
-                    Vec2::new(base_x, base_y + 0.5),
-                    Vec2::new(base_x + 0.5, base_y + 1.0),
-                ],
-                triangles: vec![[0, 1, 2]],
-            },
-            _ => unreachable!(),
-        }
-    }
-
-    fn create_inverse_corner_mesh(cell_x: f32, cell_y: f32, corner: usize) -> CellMesh {
-        let base_x = cell_x;
-        let base_y = cell_y;
-
-        // Create full square minus the corner
-        match corner {
-            0 => CellMesh {
-                // all except bottom-left
-                vertices: vec![
-                    Vec2::new(base_x + 0.5, base_y),
-                    Vec2::new(base_x + 1.0, base_y),
-                    Vec2::new(base_x + 1.0, base_y + 1.0),
-                    Vec2::new(base_x, base_y + 1.0),
-                    Vec2::new(base_x, base_y + 0.5),
-                ],
-                triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
-            },
-            1 => CellMesh {
-                // all except bottom-right (case 13)
-                vertices: vec![
-                    Vec2::new(base_x, base_y),
-                    Vec2::new(base_x + 0.5, base_y),
-                    Vec2::new(base_x + 1.0, base_y + 0.5),
-                    Vec2::new(base_x + 1.0, base_y + 1.0),
-                    Vec2::new(base_x, base_y + 1.0),
-                ],
-                triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
-            },
-            2 => CellMesh {
-                // all except top-right (case 11)
-                vertices: vec![
-                    Vec2::new(base_x, base_y),
-                    Vec2::new(base_x + 1.0, base_y),
-                    Vec2::new(base_x + 1.0, base_y + 0.5),
-                    Vec2::new(base_x + 0.5, base_y + 1.0),
-                    Vec2::new(base_x, base_y + 1.0),
-                ],
-                triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
-            },
-            3 => CellMesh {
-                // all except top-left (case 7)
-                vertices: vec![
-                    Vec2::new(base_x, base_y),
-                    Vec2::new(base_x + 1.0, base_y),
-                    Vec2::new(base_x + 1.0, base_y + 1.0),
-                    Vec2::new(base_x + 0.5, base_y + 1.0),
-                    Vec2::new(base_x, base_y + 0.5),
-                ],
-                triangles: vec![[0, 1, 2], [0, 2, 3], [0, 3, 4]],
-            },
-            _ => unreachable!(),
-        }
-    }
-
-    fn create_edge_mesh(cell_x: f32, cell_y: f32, edge: usize) -> CellMesh {
-        let base_x = cell_x;
-        let base_y = cell_y;
-
-        match edge {
-            0 => CellMesh {
-                // bottom edge
-                vertices: vec![
-                    Vec2::new(base_x, base_y),
-                    Vec2::new(base_x + 1.0, base_y),
-                    Vec2::new(base_x + 1.0, base_y + 0.5),
-                    Vec2::new(base_x, base_y + 0.5),
-                ],
-                triangles: vec![[0, 1, 2], [0, 2, 3]],
-            },
-            1 => CellMesh {
-                // right edge
-                vertices: vec![
-                    Vec2::new(base_x + 0.5, base_y),
-                    Vec2::new(base_x + 1.0, base_y),
-                    Vec2::new(base_x + 1.0, base_y + 1.0),
-                    Vec2::new(base_x + 0.5, base_y + 1.0),
-                ],
-                triangles: vec![[0, 1, 2], [0, 2, 3]],
-            },
-            2 => CellMesh {
-                // top edge
-                vertices: vec![
-                    Vec2::new(base_x, base_y + 0.5),
-                    Vec2::new(base_x + 1.0, base_y + 0.5),
-                    Vec2::new(base_x + 1.0, base_y + 1.0),
-                    Vec2::new(base_x, base_y + 1.0),
-                ],
-                triangles: vec![[0, 1, 2], [0, 2, 3]],
-            },
-            3 => CellMesh {
-                // left edge
-                vertices: vec![
-                    Vec2::new(base_x, base_y),
-                    Vec2::new(base_x + 0.5, base_y),
-                    Vec2::new(base_x + 0.5, base_y + 1.0),
-                    Vec2::new(base_x, base_y + 1.0),
-                ],
-                triangles: vec![[0, 1, 2], [0, 2, 3]],
-            },
-            _ => unreachable!(),
-        }
-    }
-
-    fn create_diagonal_mesh(cell_x: f32, cell_y: f32, flip: bool) -> CellMesh {
-        let base_x = cell_x;
-        let base_y = cell_y;
-
-        if flip {
-            // bottom-right + top-left
-            CellMesh {
-                vertices: vec![
-                    Vec2::new(base_x + 0.5, base_y),       // bottom center
-                    Vec2::new(base_x + 1.0, base_y),       // bottom-right
-                    Vec2::new(base_x + 1.0, base_y + 0.5), // right center
-                    Vec2::new(base_x, base_y + 0.5),       // left center
-                    Vec2::new(base_x, base_y + 1.0),       // top-left
-                    Vec2::new(base_x + 0.5, base_y + 1.0), // top center
-                ],
-                triangles: vec![
-                    [0, 1, 2], // bottom-right triangle
-                    [3, 4, 5], // top-left triangle
-                ],
-            }
-        } else {
-            // bottom-left + top-right
-            CellMesh {
-                vertices: vec![
-                    Vec2::new(base_x, base_y),             // bottom-left
-                    Vec2::new(base_x + 0.5, base_y),       // bottom center
-                    Vec2::new(base_x, base_y + 0.5),       // left center
-                    Vec2::new(base_x + 0.5, base_y + 1.0), // top center
-                    Vec2::new(base_x + 1.0, base_y + 1.0), // top-right
-                    Vec2::new(base_x + 1.0, base_y + 0.5), // right center
-                ],
-                triangles: vec![
-                    [0, 1, 2], // bottom-left triangle
-                    [3, 4, 5], // top-right triangle
-                ],
-            }
-        }
-    }
-
-    fn create_generic_mesh(cell_x: f32, cell_y: f32, corners: [bool; 4]) -> CellMesh {
-        let mut vertices = Vec::new();
-        let mut triangles = Vec::new();
-
-        // Count filled corners
-        let filled_count = corners.iter().filter(|&&c| c).count();
-
-        if filled_count == 0 {
-            // No mesh needed
-            return CellMesh {
-                vertices,
-                triangles,
-            };
-        }
-
-        if filled_count == 4 {
-            // All filled - create full quad
-            let base_x = cell_x;
-            let base_y = cell_y;
-            vertices = vec![
-                Vec2::new(base_x, base_y),
-                Vec2::new(base_x + 1.0, base_y),
-                Vec2::new(base_x + 1.0, base_y + 1.0),
-                Vec2::new(base_x, base_y + 1.0),
-            ];
-            triangles = vec![[0, 1, 2], [0, 2, 3]];
-        } else {
-            // For partial fills, create a more conservative mesh
-            // This is a fallback that tries to avoid sharp edges
-            let base_x = cell_x;
-            let base_y = cell_y;
-            let center_x = base_x + 0.5;
-            let center_y = base_y + 0.5;
-
-            // Create triangular segments for each filled corner
-            if corners[0] {
-                // bottom-left
-                vertices.extend_from_slice(&[
-                    Vec2::new(base_x, base_y),
-                    Vec2::new(center_x, base_y),
-                    Vec2::new(base_x, center_y),
-                ]);
-                let base_idx = vertices.len() as u32 - 3;
-                triangles.push([base_idx, base_idx + 1, base_idx + 2]);
-            }
-            if corners[1] {
-                // bottom-right
-                vertices.extend_from_slice(&[
-                    Vec2::new(base_x + 1.0, base_y),
-                    Vec2::new(center_x, base_y),
-                    Vec2::new(base_x + 1.0, center_y),
-                ]);
-                let base_idx = vertices.len() as u32 - 3;
-                triangles.push([base_idx, base_idx + 2, base_idx + 1]);
-            }
-            if corners[2] {
-                // top-right
-                vertices.extend_from_slice(&[
-                    Vec2::new(base_x + 1.0, base_y + 1.0),
-                    Vec2::new(base_x + 1.0, center_y),
-                    Vec2::new(center_x, base_y + 1.0),
-                ]);
-                let base_idx = vertices.len() as u32 - 3;
-                triangles.push([base_idx, base_idx + 1, base_idx + 2]);
-            }
-            if corners[3] {
-                // top-left
-                vertices.extend_from_slice(&[
-                    Vec2::new(base_x, base_y + 1.0),
-                    Vec2::new(base_x, center_y),
-                    Vec2::new(center_x, base_y + 1.0),
-                ]);
-                let base_idx = vertices.len() as u32 - 3;
-                triangles.push([base_idx, base_idx + 2, base_idx + 1]);
-            }
-        }
-
-        CellMesh {
-            vertices,
-            triangles,
-        }
-    }
-
     fn generate_cell_mesh(config: CellConfiguration, cell_x: f32, cell_y: f32) -> Option<CellMesh> {
         let corners = config.corners;
 
@@ -476,9 +175,9 @@ impl DualContourer {
                 None
             }
             4 => {
-                // All corners inside - create full quad but check for nearby surface intersections
-                // This ensures interior cells connect properly with surface cells
-                Some(Self::create_full_quad(cell_x, cell_y))
+                // Completely filled - for SDF terrain, skip these to avoid blocky appearance
+                // The surface detail should come from neighboring partial cells
+                None
             }
             _ => {
                 // Partial fill - this is where the surface is, use intersection-based meshing
@@ -556,16 +255,262 @@ impl DualContourer {
         })
     }
 
-    /// Check if there's a surface crossing in this cell
-    fn has_surface_crossing(corners: &[f32; 4]) -> bool {
-        // Look for sign changes between corners
-        for i in 0..4 {
-            let next = (i + 1) % 4;
-            if (corners[i] > 0.0) != (corners[next] > 0.0) {
-                return true;
+    /// Generate mesh for a cell using proper SDF-based dual contouring
+    fn generate_sdf_cell_mesh(
+        world: &World,
+        cell_x: i32,
+        cell_y: i32,
+        target_type: VoxelType,
+    ) -> Option<CellMesh> {
+        // Sample SDF at cell corners
+        let corners = [
+            Self::sample_sdf_at_point(world, cell_x as f32, cell_y as f32, target_type),
+            Self::sample_sdf_at_point(world, cell_x as f32 + 1.0, cell_y as f32, target_type),
+            Self::sample_sdf_at_point(world, cell_x as f32 + 1.0, cell_y as f32 + 1.0, target_type),
+            Self::sample_sdf_at_point(world, cell_x as f32, cell_y as f32 + 1.0, target_type),
+        ];
+
+        // Check if this cell contains the surface
+        let inside_corners: Vec<bool> = corners.iter().map(|&c| c <= 0.0).collect();
+        let inside_count = inside_corners.iter().filter(|&&inside| inside).count();
+        
+        match inside_count {
+            0 => None, // All outside - no surface
+            4 => {
+                // All inside - generate filled quad for solid material
+                Some(Self::create_filled_quad(cell_x as f32, cell_y as f32))
+            }
+            _ => {
+                // Surface crosses cell - use true dual contouring
+                Self::generate_dual_contour_mesh(world, &corners, cell_x, cell_y, target_type)
             }
         }
-        false
+    }
+
+    /// Sample SDF at a specific point with proper material handling
+    fn sample_sdf_at_point(world: &World, x: f32, y: f32, target_type: VoxelType) -> f32 {
+        let ix = x.round() as i32;
+        let iy = y.round() as i32;
+        
+        let chunk_size = World::chunk_size() as i32;
+        let chunk_x = ix.div_euclid(chunk_size);
+        let chunk_y = iy.div_euclid(chunk_size);
+
+        if world.is_chunk_loaded(chunk_x, chunk_y) {
+            let sdf = world.get_voxel_sdf(ix, iy);
+            let actual_material = sdf.get_material();
+            
+            // For target material, return negative distance (inside)
+            // For non-target material, return positive distance (outside)
+            if actual_material == target_type {
+                -sdf.distance.abs()
+            } else {
+                sdf.distance.abs()
+            }
+        } else {
+            // Default for unloaded chunks - assume outside
+            100.0
+        }
+    }
+
+    /// Create a filled quad for completely solid cells
+    fn create_filled_quad(cell_x: f32, cell_y: f32) -> CellMesh {
+        CellMesh {
+            vertices: vec![
+                Vec2::new(cell_x, cell_y),           // bottom-left
+                Vec2::new(cell_x + 1.0, cell_y),     // bottom-right
+                Vec2::new(cell_x + 1.0, cell_y + 1.0), // top-right
+                Vec2::new(cell_x, cell_y + 1.0),     // top-left
+            ],
+            triangles: vec![
+                [0, 1, 2], // First triangle
+                [0, 2, 3], // Second triangle
+            ],
+        }
+    }
+
+    /// Generate mesh using true dual contouring - finds optimal vertex per cell
+    fn generate_dual_contour_mesh(
+        world: &World,
+        corners: &[f32; 4],
+        cell_x: i32,
+        cell_y: i32,
+        target_type: VoxelType,
+    ) -> Option<CellMesh> {
+        // Find the optimal vertex position within this cell using dual contouring
+        let vertex_pos = Self::find_dual_contour_vertex(corners, cell_x as f32, cell_y as f32);
+        
+        // For 2D dual contouring, we need to connect to neighboring cells
+        // This is more complex than marching squares - we create quads between cell vertices
+        
+        let mut vertices = vec![vertex_pos];
+        let mut triangles = Vec::new();
+        
+        // Check which edges have surface crossings and connect to neighboring cells
+        let edge_crossings = Self::find_edge_crossings(corners);
+        
+        if edge_crossings.is_empty() {
+            return None; // No surface crossings
+        }
+        
+        // For each edge crossing, we need to connect to the adjacent cell's vertex
+        // This creates the characteristic smooth surfaces of dual contouring
+        let neighbor_connections = Self::get_neighbor_vertices(
+            world, cell_x, cell_y, target_type, &edge_crossings
+        );
+        
+        if neighbor_connections.len() < 2 {
+            return None; // Need at least 2 connections for a surface
+        }
+        
+        // Add neighbor vertices
+        for neighbor_vertex in &neighbor_connections {
+            vertices.push(*neighbor_vertex);
+        }
+        
+        // Create triangles connecting the vertices
+        // In dual contouring, we typically create triangle strips along surface flows
+        if vertices.len() >= 3 {
+            // Create triangles in a fan pattern, but optimized for dual contouring
+            let center_idx = 0; // Our cell's vertex
+            for i in 1..vertices.len() - 1 {
+                triangles.push([center_idx, i as u32, (i + 1) as u32]);
+            }
+            
+            // Close the fan if we have enough vertices
+            if vertices.len() > 3 {
+                triangles.push([center_idx, (vertices.len() - 1) as u32, 1]);
+            }
+        }
+        
+        if triangles.is_empty() {
+            return None;
+        }
+        
+        Some(CellMesh { vertices, triangles })
+    }
+    
+    /// Find the optimal vertex position within a cell for dual contouring
+    fn find_dual_contour_vertex(corners: &[f32; 4], cell_x: f32, cell_y: f32) -> Vec2 {
+        // Calculate edge intersections using linear interpolation
+        let intersections = Self::calculate_sdf_intersections(corners, cell_x, cell_y);
+        
+        if intersections.is_empty() {
+            // Fallback to cell center if no intersections found
+            return Vec2::new(cell_x + 0.5, cell_y + 0.5);
+        }
+        
+        // For proper dual contouring, we should solve a least-squares problem to find
+        // the vertex that minimizes distance to all the surface constraints.
+        // For simplicity, we'll use the centroid of intersection points as approximation
+        let mut centroid = Vec2::ZERO;
+        for intersection in &intersections {
+            centroid += *intersection;
+        }
+        centroid / intersections.len() as f32
+    }
+    
+    /// Find which edges have surface crossings (sign changes)
+    fn find_edge_crossings(corners: &[f32; 4]) -> Vec<usize> {
+        let mut crossings = Vec::new();
+        
+        for i in 0..4 {
+            let next = (i + 1) % 4;
+            let sdf1 = corners[i];
+            let sdf2 = corners[next];
+            
+            // Check for sign change (surface crossing)
+            if (sdf1 > 0.0) != (sdf2 > 0.0) {
+                crossings.push(i);
+            }
+        }
+        
+        crossings
+    }
+    
+    /// Get vertices from neighboring cells that we should connect to
+    fn get_neighbor_vertices(
+        world: &World,
+        cell_x: i32,
+        cell_y: i32,
+        target_type: VoxelType,
+        edge_crossings: &[usize],
+    ) -> Vec<Vec2> {
+        let mut neighbor_vertices = Vec::new();
+        
+        // For each edge that has a crossing, check the adjacent cell
+        for &edge_idx in edge_crossings {
+            let (neighbor_x, neighbor_y) = match edge_idx {
+                0 => (cell_x, cell_y - 1), // Bottom edge -> cell below
+                1 => (cell_x + 1, cell_y), // Right edge -> cell to right  
+                2 => (cell_x, cell_y + 1), // Top edge -> cell above
+                3 => (cell_x - 1, cell_y), // Left edge -> cell to left
+                _ => continue,
+            };
+            
+            // Sample the neighbor cell and get its dual contour vertex
+            if let Some(neighbor_vertex) = Self::get_neighbor_cell_vertex(
+                world, neighbor_x, neighbor_y, target_type
+            ) {
+                neighbor_vertices.push(neighbor_vertex);
+            }
+        }
+        
+        neighbor_vertices
+    }
+    
+    /// Get the dual contour vertex from a neighboring cell
+    fn get_neighbor_cell_vertex(
+        world: &World,
+        neighbor_x: i32,
+        neighbor_y: i32,
+        target_type: VoxelType,
+    ) -> Option<Vec2> {
+        // Sample neighboring cell corners
+        let neighbor_corners = [
+            Self::sample_sdf_at_point(world, neighbor_x as f32, neighbor_y as f32, target_type),
+            Self::sample_sdf_at_point(world, neighbor_x as f32 + 1.0, neighbor_y as f32, target_type),
+            Self::sample_sdf_at_point(world, neighbor_x as f32 + 1.0, neighbor_y as f32 + 1.0, target_type),
+            Self::sample_sdf_at_point(world, neighbor_x as f32, neighbor_y as f32 + 1.0, target_type),
+        ];
+        
+        // Check if neighbor has surface crossing
+        let inside_count = neighbor_corners.iter().filter(|&&c| c <= 0.0).count();
+        if inside_count == 0 || inside_count == 4 {
+            return None; // No surface in neighbor
+        }
+        
+        // Calculate neighbor's dual contour vertex
+        Some(Self::find_dual_contour_vertex(&neighbor_corners, neighbor_x as f32, neighbor_y as f32))
+    }
+
+    /// Calculate intersection points using SDF linear interpolation
+    fn calculate_sdf_intersections(corners: &[f32; 4], cell_x: f32, cell_y: f32) -> Vec<Vec2> {
+        let mut intersections = Vec::new();
+
+        let corner_positions = [
+            Vec2::new(cell_x, cell_y),             // bottom-left
+            Vec2::new(cell_x + 1.0, cell_y),       // bottom-right
+            Vec2::new(cell_x + 1.0, cell_y + 1.0), // top-right
+            Vec2::new(cell_x, cell_y + 1.0),       // top-left
+        ];
+
+        // Check each edge for zero-crossing
+        for i in 0..4 {
+            let next = (i + 1) % 4;
+            let sdf1 = corners[i];
+            let sdf2 = corners[next];
+
+            // Check for sign change (surface crossing)
+            if (sdf1 > 0.0) != (sdf2 > 0.0) {
+                // Linear interpolation to find exact crossing point
+                let t = sdf1 / (sdf1 - sdf2);
+                let intersection = corner_positions[i].lerp(corner_positions[next], t);
+                intersections.push(intersection);
+            }
+        }
+
+        intersections
     }
 
     /// Calculate where the surface intersects each edge
@@ -598,83 +543,4 @@ impl DualContourer {
         intersections
     }
 
-    /// Create a mesh from intersection points
-    fn create_mesh_from_intersections(
-        intersections: Vec<Vec2>,
-        cell_x: f32,
-        cell_y: f32,
-    ) -> Option<CellMesh> {
-        if intersections.len() < 2 {
-            return None;
-        }
-
-        if intersections.len() == 2 {
-            // Simple case: line segment, create a thin quad
-            let p1 = intersections[0];
-            let p2 = intersections[1];
-
-            // Calculate perpendicular direction for thickness
-            let dir = (p2 - p1).normalize();
-            let perp = Vec2::new(-dir.y, dir.x) * 0.1; // Small thickness
-
-            let vertices = vec![p1 + perp, p2 + perp, p2 - perp, p1 - perp];
-
-            return Some(CellMesh {
-                vertices,
-                triangles: vec![[0, 1, 2], [0, 2, 3]],
-            });
-        }
-
-        if intersections.len() == 4 {
-            // Four intersections - create a quad connecting them
-            // Sort intersections clockwise around cell center
-            let center = Vec2::new(cell_x + 0.5, cell_y + 0.5);
-            let mut sorted_intersections = intersections;
-            sorted_intersections.sort_by(|a, b| {
-                let angle_a = (a - center).y.atan2((a - center).x);
-                let angle_b = (b - center).y.atan2((b - center).x);
-                angle_a.partial_cmp(&angle_b).unwrap()
-            });
-
-            return Some(CellMesh {
-                vertices: sorted_intersections,
-                triangles: vec![[0, 1, 2], [0, 2, 3]],
-            });
-        }
-
-        // For other cases, create a fan from center
-        let center = Vec2::new(cell_x + 0.5, cell_y + 0.5);
-        let mut vertices = vec![center];
-        vertices.extend(intersections);
-
-        let mut triangles = Vec::new();
-        for i in 1..vertices.len() {
-            let next = if i == vertices.len() - 1 { 1 } else { i + 1 };
-            triangles.push([0, i as u32, next as u32]);
-        }
-
-        Some(CellMesh {
-            vertices,
-            triangles,
-        })
-    }
-
-    // Helper function to check if we can sample all 4 corners of a cell
-    // fn can_sample_cell(world: &ChunkWorld, x: i32, y: i32) -> bool {
-    //     let chunk_size = ChunkWorld::chunk_size() as i32;
-
-    //     for dy in 0..=1 {
-    //         for dx in 0..=1 {
-    //             let voxel_x = x + dx;
-    //             let voxel_y = y + dy;
-    //             let chunk_x = voxel_x.div_euclid(chunk_size);
-    //             let chunk_y = voxel_y.div_euclid(chunk_size);
-
-    //             if !world.is_chunk_loaded(chunk_x, chunk_y) {
-    //                 return false;
-    //             }
-    //         }
-    //     }
-    //     true
-    // }
 }

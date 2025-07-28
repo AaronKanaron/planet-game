@@ -5,7 +5,6 @@ use bevy::{
 };
 
 use crate::planet::{
-    debug::{DebugState, TriangleCount},
     meshing::dual_contourer::DualContourer,
     rendering::materials::{CoreMaterial, DirtMaterial, GrassMaterial, RockMaterial},
     world::{
@@ -22,12 +21,6 @@ pub struct ChunkMesh {
     pub chunk_x: i32,
     pub chunk_y: i32,
 }
-
-#[derive(Component)]
-pub struct WireframeMesh;
-
-#[derive(Component)]
-pub struct ChunkBoundary;
 
 pub struct MeshRenderer;
 
@@ -49,9 +42,7 @@ impl MeshRenderer {
     pub fn render_mesh(
         mut commands: Commands,
         mut world: ResMut<World>,
-        debug_state: Res<DebugState>,
         mut meshes: ResMut<Assets<Mesh>>,
-        mut materials: ResMut<Assets<ColorMaterial>>,
         mut rock_materials: ResMut<Assets<RockMaterial>>,
         mut dirt_materials: ResMut<Assets<DirtMaterial>>,
         mut grass_materials: ResMut<Assets<GrassMaterial>>,
@@ -85,8 +76,14 @@ impl MeshRenderer {
             ] {
                 let (vertices, indices) =
                     DualContourer::generate_chunk_mesh(&world, chunk_x, chunk_y, material_type);
+                
+                // Debug mesh generation
+                if !vertices.is_empty() {
+                    println!("Generated mesh for {:?} at chunk ({}, {}) with {} vertices, {} indices", 
+                            material_type, chunk_x, chunk_y, vertices.len(), indices.len());
+                }
+                
                 if !vertices.is_empty() && !indices.is_empty() {
-                    let triangle_count = indices.len() / 3;
                     let mut filled_mesh = Mesh::new(
                         PrimitiveTopology::TriangleList,
                         RenderAssetUsages::RENDER_WORLD,
@@ -116,7 +113,6 @@ impl MeshRenderer {
                                 Transform::default(),
                                 Voxel,
                                 ChunkMesh { chunk_x, chunk_y },
-                                TriangleCount(triangle_count),
                             ));
                         }
                         VoxelType::Dirt => {
@@ -130,7 +126,6 @@ impl MeshRenderer {
                                 Transform::default(),
                                 Voxel,
                                 ChunkMesh { chunk_x, chunk_y },
-                                TriangleCount(triangle_count),
                             ));
                         }
                         VoxelType::Grass => {
@@ -144,7 +139,6 @@ impl MeshRenderer {
                                 Transform::default(),
                                 Voxel,
                                 ChunkMesh { chunk_x, chunk_y },
-                                TriangleCount(triangle_count),
                             ));
                         }
                         VoxelType::Core => {
@@ -158,27 +152,12 @@ impl MeshRenderer {
                                 Transform::default(),
                                 Voxel,
                                 ChunkMesh { chunk_x, chunk_y },
-                                TriangleCount(triangle_count),
                             ));
                         }
                         VoxelType::Air => {
                             continue;
                         }
                     }
-
-                    // Always create wireframe mesh but with appropriate visibility
-                    Self::spawn_wireframe_mesh(
-                        &mut commands,
-                        &mut meshes,
-                        &mut materials,
-                        vertices,
-                        normals,
-                        indices,
-                        chunk_x,
-                        chunk_y,
-                        debug_state.wireframe_enabled,
-                        triangle_count,
-                    );
                 }
             }
 
@@ -209,64 +188,5 @@ impl MeshRenderer {
         let size = max_bounds - min_bounds;
         // Ensure minimum size to avoid division by zero
         Vec3::new(size.x.max(1.0), size.y.max(1.0), size.z.max(1.0))
-    }
-
-    /// For debugging: spawn a wireframe mesh for the chunk.
-    fn spawn_wireframe_mesh(
-        commands: &mut Commands,
-        meshes: &mut ResMut<Assets<Mesh>>,
-        materials: &mut ResMut<Assets<ColorMaterial>>,
-        vertices: Vec<[f32; 3]>,
-        normals: Vec<[f32; 3]>,
-        indices: Vec<u32>,
-        chunk_x: i32,
-        chunk_y: i32,
-        visible: bool,
-        triangle_count: usize,
-    ) {
-        let wireframe_indices = Self::generate_wireframe_indices(&indices);
-
-        if !wireframe_indices.is_empty() {
-            let mut wireframe_mesh =
-                Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::RENDER_WORLD);
-
-            wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-            wireframe_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-            wireframe_mesh.insert_indices(Indices::U32(wireframe_indices));
-
-            // Spawn wireframe mesh
-            commands.spawn((
-                Mesh2d(meshes.add(wireframe_mesh)),
-                MeshMaterial2d(materials.add(ColorMaterial::from(Color::srgb(1.0, 1.0, 1.0)))),
-                Transform::from_xyz(0.0, 0.0, 0.1), // Slightly in front
-                Voxel,
-                ChunkMesh { chunk_x, chunk_y },
-                WireframeMesh,
-                TriangleCount(triangle_count),
-                if visible {
-                    Visibility::Visible
-                } else {
-                    Visibility::Hidden
-                },
-            ));
-        }
-    }
-
-    fn generate_wireframe_indices(triangle_indices: &[u32]) -> Vec<u32> {
-        let mut wireframe_indices = Vec::new();
-
-        // Convert each triangle to 3 lines
-        for triangle in triangle_indices.chunks(3) {
-            if triangle.len() == 3 {
-                let a = triangle[0];
-                let b = triangle[1];
-                let c = triangle[2];
-
-                // Add three lines: a-b, b-c, c-a
-                wireframe_indices.extend_from_slice(&[a, b, b, c, c, a]);
-            }
-        }
-
-        wireframe_indices
     }
 }
