@@ -1,6 +1,5 @@
 use crate::planet::{
     debug::{DebugPlugin, DebugState},
-    meshing::mesh_renderer::MeshRenderer,
     rendering::{
         culling::ChunkCullingBox,
         culling_system::{chunk_culling_system, culling_box_input_system, draw_culling_box_gizmo},
@@ -48,8 +47,6 @@ impl Plugin for PlanetPlugin {
                 Update,
                 (
                     chunk_culling_system,
-                    MeshRenderer::cleanup_unloaded_chunks,
-                    MeshRenderer::render_mesh,
                     draw_culling_box_gizmo,
                     culling_box_input_system,
                 )

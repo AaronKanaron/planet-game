@@ -2,9 +2,15 @@
 use bevy::prelude::*;
 
 use crate::planet::{
-    meshing::{dual_contouring::DualContouring, render_voxels::VOXEL_SIZE},
-    rendering::culling::ChunkCullingBox,
-    world::{chunk::CHUNK_SIZE, chunk_world::World},
+    meshing::{
+        dual_contouring::DualContouring, mesh_renderer::ChunkMesh, render_voxels::VOXEL_SIZE,
+        render_voxels::VoxelRenderer,
+    },
+    rendering::{
+        culling::ChunkCullingBox,
+        materials::{CoreMaterial, DirtMaterial, GrassMaterial, RockMaterial},
+    },
+    world::{chunk::CHUNK_SIZE, chunk_world::World, voxel::VoxelType},
 };
 
 /* Structs */
@@ -13,6 +19,8 @@ pub struct DebugState {
     pub show_contour_cells: bool,
     pub show_normals: bool,
     pub show_interior_vertices: bool,
+    pub show_contour_lines: bool,
+    pub show_voxels: bool,
 }
 
 #[derive(Component)]
@@ -28,6 +36,8 @@ impl Plugin for DebugPlugin {
                 Self::update_info,
                 Self::input_system,
                 Self::render_contour_gizmos_system,
+                Self::render_voxels_system,
+                Self::cleanup_unloaded_chunks,
             ),
         );
     }
@@ -39,6 +49,8 @@ impl Default for DebugState {
             show_contour_cells: false,
             show_normals: false,
             show_interior_vertices: false,
+            show_contour_lines: false,
+            show_voxels: true, // Show voxels by default
         }
     }
 }
@@ -89,7 +101,7 @@ impl DebugPlugin {
             };
 
             **text = format!(
-                "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nChunk Range: ({}, {}) to ({}, {})\n\nDebug Visualization:\nF1 - Contour Cells: {}\nF2 - Normals: {}\nF3 - Interior Vertices: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nI/O - Zoom in/out",
+                "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nChunk Range: ({}, {}) to ({}, {})\n\nDebug Visualization:\nF1 - Contour Cells: {}\nF2 - Normals: {}\nF3 - Interior Vertices: {}\nF4 - Contour Lines: {}\nF5 - Voxels: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nI/O - Zoom in/out",
                 chunk_world.loaded_chunk_count(),
                 expected_chunks,
                 culling_box.center.x,
@@ -116,6 +128,12 @@ impl DebugPlugin {
                 } else {
                     "OFF"
                 },
+                if debug_state.show_contour_lines {
+                    "ON"
+                } else {
+                    "OFF"
+                },
+                if debug_state.show_voxels { "ON" } else { "OFF" },
             );
         }
     }
@@ -124,6 +142,7 @@ impl DebugPlugin {
     pub fn input_system(
         keyboard_input: Res<ButtonInput<KeyCode>>,
         mut debug_state: ResMut<DebugState>,
+        mut world: ResMut<World>,
     ) {
         if keyboard_input.just_pressed(KeyCode::F1) {
             debug_state.show_contour_cells = !debug_state.show_contour_cells;
@@ -138,6 +157,31 @@ impl DebugPlugin {
         if keyboard_input.just_pressed(KeyCode::F3) {
             debug_state.show_interior_vertices = !debug_state.show_interior_vertices;
             info!("Interior vertices: {}", debug_state.show_interior_vertices);
+        }
+
+        if keyboard_input.just_pressed(KeyCode::F4) {
+            debug_state.show_contour_lines = !debug_state.show_contour_lines;
+            info!("Contour lines: {}", debug_state.show_contour_lines);
+        }
+
+        if keyboard_input.just_pressed(KeyCode::F5) {
+            let was_enabled = debug_state.show_voxels;
+            debug_state.show_voxels = !debug_state.show_voxels;
+            info!("Voxels: {}", debug_state.show_voxels);
+
+            // If voxels were just enabled, force update all chunks
+            if !was_enabled && debug_state.show_voxels {
+                // Mark all loaded chunks as dirty
+                let chunk_positions: Vec<(i32, i32)> =
+                    world.loaded_chunks.keys().cloned().collect();
+                for (chunk_x, chunk_y) in chunk_positions {
+                    world.mark_chunk_dirty(chunk_x, chunk_y);
+                }
+                info!(
+                    "Marked {} chunks dirty for voxel rendering",
+                    world.loaded_chunks.len()
+                );
+            }
         }
     }
 
@@ -231,6 +275,92 @@ impl DebugPlugin {
                 );
             }
         }
+
+        // Draw contour lines connecting adjacent vertices (F4 toggle)
+        if debug_state.show_contour_lines {
+            Self::render_contour_lines(contour_cells, chunk_x, chunk_y, gizmos);
+        }
+    }
+
+    /// Render contour lines connecting adjacent interior vertices
+    fn render_contour_lines(
+        contour_cells: &[crate::planet::meshing::dual_contouring::ContourCell],
+        chunk_x: i32,
+        chunk_y: i32,
+        gizmos: &mut Gizmos,
+    ) {
+        // Create a map of cell positions to their absolute vertex positions for quick lookup
+        let mut cell_vertices = std::collections::HashMap::new();
+
+        for cell in contour_cells {
+            let chunk_world_x = chunk_x as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
+            let chunk_world_y = chunk_y as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
+            let cell_world_x = chunk_world_x + cell.x as f32 * VOXEL_SIZE;
+            let cell_world_y = chunk_world_y + cell.y as f32 * VOXEL_SIZE;
+
+            let absolute_vertex_pos = Vec2::new(
+                cell_world_x + cell.interior_vertex.x * VOXEL_SIZE,
+                cell_world_y + cell.interior_vertex.y * VOXEL_SIZE,
+            );
+
+            cell_vertices.insert((cell.x, cell.y), absolute_vertex_pos);
+        }
+
+        // Connect adjacent vertices that share an edge
+        for cell in contour_cells {
+            let current_pos = cell_vertices.get(&(cell.x, cell.y)).unwrap();
+
+            // Check all 4 adjacent cells (right, up, left, down)
+            let adjacents = [
+                (cell.x + 1, cell.y),             // right
+                (cell.x, cell.y + 1),             // up
+                (cell.x.wrapping_sub(1), cell.y), // left (with underflow protection)
+                (cell.x, cell.y.wrapping_sub(1)), // down (with underflow protection)
+            ];
+
+            for &(adj_x, adj_y) in &adjacents {
+                // Only draw lines to right and up neighbors to avoid drawing each line twice
+                if (adj_x == cell.x + 1 && adj_y == cell.y)
+                    || (adj_x == cell.x && adj_y == cell.y + 1)
+                {
+                    if let Some(adj_pos) = cell_vertices.get(&(adj_x, adj_y)) {
+                        // Check if the edge between these cells should have a contour line
+                        // This happens when the cells share a common edge with a sign change
+                        if Self::should_connect_vertices(cell, adj_x, adj_y, contour_cells) {
+                            gizmos.line_2d(*current_pos, *adj_pos, Color::srgb(0.0, 0.8, 1.0)); // Cyan contour lines
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Check if two adjacent cells should be connected with a contour line
+    fn should_connect_vertices(
+        cell: &crate::planet::meshing::dual_contouring::ContourCell,
+        adj_x: usize,
+        adj_y: usize,
+        all_cells: &[crate::planet::meshing::dual_contouring::ContourCell],
+    ) -> bool {
+        // Find the adjacent cell
+        if let Some(_adj_cell) = all_cells.iter().find(|c| c.x == adj_x && c.y == adj_y) {
+            // Two contour cells should be connected if they share a common edge
+            // and both have interior vertices (which they do, since they're both contour cells)
+
+            // Determine which edge they share
+            if adj_x == cell.x + 1 && adj_y == cell.y {
+                // Adjacent to the right - they share the right edge of current cell
+                // Connect if both cells exist (which they do)
+                true
+            } else if adj_x == cell.x && adj_y == cell.y + 1 {
+                // Adjacent upward - they share the top edge of current cell
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
 
     /// System to render contour gizmos with debug toggles
@@ -243,6 +373,7 @@ impl DebugPlugin {
         if !debug_state.show_contour_cells
             && !debug_state.show_normals
             && !debug_state.show_interior_vertices
+            && !debug_state.show_contour_lines
         {
             return;
         }
@@ -252,5 +383,81 @@ impl DebugPlugin {
             let contour_cells = DualContouring::find_contour_cells(&world, chunk_x, chunk_y);
             Self::render_contour_cells(&contour_cells, chunk_x, chunk_y, &mut gizmos, &debug_state);
         }
+    }
+
+    /// System to render voxels with debug toggle
+    pub fn render_voxels_system(
+        mut commands: Commands,
+        mut world: ResMut<World>,
+        debug_state: Res<DebugState>,
+        mut meshes: ResMut<Assets<Mesh>>,
+        mut rock_materials: ResMut<Assets<RockMaterial>>,
+        mut dirt_materials: ResMut<Assets<DirtMaterial>>,
+        mut grass_materials: ResMut<Assets<GrassMaterial>>,
+        mut core_materials: ResMut<Assets<CoreMaterial>>,
+        existing_chunks: Query<(Entity, &ChunkMesh)>,
+    ) {
+        if !debug_state.show_voxels {
+            // If voxels are disabled, despawn all existing voxel meshes
+            for (entity, _) in existing_chunks.iter() {
+                commands.entity(entity).despawn();
+            }
+            return;
+        }
+
+        let dirty_chunks = world.get_dirty_chunks();
+        if dirty_chunks.is_empty() {
+            return;
+        }
+
+        // Despawn dirty chunks
+        for (entity, chunk_mesh) in existing_chunks.iter() {
+            if dirty_chunks.contains(&(chunk_mesh.chunk_x, chunk_mesh.chunk_y)) {
+                commands.entity(entity).despawn();
+            }
+        }
+
+        // Regenerate meshes for dirty chunks only
+        for &(chunk_x, chunk_y) in &dirty_chunks {
+            // Skip if chunk is no longer loaded (might have been unloaded)
+            if !world.is_chunk_loaded(chunk_x, chunk_y) {
+                continue;
+            }
+
+            let chunk = world.loaded_chunks.get(&(chunk_x, chunk_y)).unwrap();
+
+            // Create separate meshes for each material type
+            for &material_type in &[
+                VoxelType::Rock,
+                VoxelType::Dirt,
+                VoxelType::Grass,
+                VoxelType::Core,
+            ] {
+                // Delegate to the voxel renderer
+                VoxelRenderer::render_voxels(
+                    chunk,
+                    chunk_x,
+                    chunk_y,
+                    material_type,
+                    &mut commands,
+                    &mut meshes,
+                    &mut rock_materials,
+                    &mut dirt_materials,
+                    &mut grass_materials,
+                    &mut core_materials,
+                );
+            }
+            // Remove dirty flag
+            world.mark_chunk_clean(chunk_x, chunk_y);
+        }
+    }
+
+    /// System to cleanup unloaded chunks
+    pub fn cleanup_unloaded_chunks(
+        commands: Commands,
+        world: Res<World>,
+        existing_chunks: Query<(Entity, &ChunkMesh)>,
+    ) {
+        VoxelRenderer::cleanup_unloaded_chunks(commands, world, existing_chunks);
     }
 }
