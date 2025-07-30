@@ -13,7 +13,9 @@ use crate::planet::world::chunk_world::World;
 use crate::planet::{meshing::render_voxels::VOXEL_SIZE, world::voxel::VoxelType};
 use crate::tiles::TilePlugin;
 use crate::tiles::data::GenericTileData;
+use crate::tiles::preview::TilePreview;
 use crate::tiles::variants::debug::DebugTile;
+use crate::tiles::variants::loudspeaker::Loudspeaker;
 use crate::utils::debug::plugin::DebugPlugin;
 
 fn main() {
@@ -33,7 +35,15 @@ fn main() {
         .add_plugins((DebugPlugin, PlanetPlugin, TilePlugin))
         // .add_plugins(CameraPlugin)
         .add_systems(Startup, setup)
-        .add_systems(Update, (handle_input, follow_culling_center, handle_zoom))
+        .add_systems(
+            Update,
+            (
+                handle_input,
+                follow_culling_center,
+                handle_zoom,
+                debug_keypress,
+            ),
+        )
         .run();
 }
 
@@ -47,8 +57,21 @@ fn setup(mut commands: Commands) {
         Transform::default(),
         GlobalTransform::default(),
     ));
+}
 
-    commands.spawn(DebugTile::new(GenericTileData::new(0, true)));
+fn debug_keypress(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    preview: Query<Entity, With<TilePreview>>,
+    mut commands: Commands,
+) {
+    if keyboard_input.just_pressed(KeyCode::KeyK) {
+        commands.spawn(Loudspeaker::new(GenericTileData::new(0, true)));
+    }
+    if keyboard_input.just_pressed(KeyCode::KeyL) {
+        if let Ok(preview) = preview.single() {
+            commands.entity(preview).remove::<TilePreview>();
+        }
+    }
 }
 
 fn handle_input(

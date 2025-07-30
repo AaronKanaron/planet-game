@@ -49,14 +49,14 @@ impl TilePreview {
     }
 
     pub fn snap_to_closest_normal_system(
-        world: Res<World>,
+        mut world: ResMut<World>,
         mut follower_query: Query<&mut TilePreview>,
     ) {
         for mut follower in follower_query.iter_mut() {
             let cursor_pos = follower.raw_cursor_position;
 
             if let Some((closest_normal, closest_position)) =
-                Self::find_closest_normal(&world, cursor_pos, f32::INFINITY)
+                Self::find_closest_normal(&mut world, cursor_pos, f32::INFINITY)
             {
                 follower.current_normal = closest_normal;
                 follower.target_position = closest_position;
@@ -68,7 +68,7 @@ impl TilePreview {
     }
 
     fn find_closest_normal(
-        world: &World,
+        world: &mut World,
         cursor_pos: Vec2,
         max_distance: f32,
     ) -> Option<(Vec2, Vec2)> {
@@ -107,31 +107,21 @@ impl TilePreview {
             )
         };
 
-        // Check all nearby chunks for contour cells
+        // Check all nearby chunks for preview points
         for chunk_x in min_chunk_x..=max_chunk_x {
             for chunk_y in min_chunk_y..=max_chunk_y {
                 if world.loaded_chunks.contains_key(&(chunk_x, chunk_y)) {
-                    let contour_cells =
-                        DualContouring::find_contour_cells(&world, chunk_x, chunk_y);
+                    let preview_points =
+                        DualContouring::get_cached_preview_points(world, chunk_x, chunk_y);
 
-                    for cell in contour_cells {
-                        // Calculate world position of the interior vertex
-                        let chunk_world_x = chunk_x as f32 * chunk_size_world;
-                        let chunk_world_y = chunk_y as f32 * chunk_size_world;
-                        let cell_world_x = chunk_world_x + cell.x as f32 * VOXEL_SIZE;
-                        let cell_world_y = chunk_world_y + cell.y as f32 * VOXEL_SIZE;
-                        let world_pos = Vec2::new(
-                            cell_world_x + cell.interior_vertex.x * VOXEL_SIZE,
-                            cell_world_y + cell.interior_vertex.y * VOXEL_SIZE,
-                        );
-
+                    for (world_pos, normal) in preview_points {
                         let distance = cursor_pos.distance(world_pos);
 
                         if distance < closest_distance
                             && (max_distance.is_infinite() || distance <= max_distance)
                         {
                             closest_distance = distance;
-                            closest_normal = Some(cell.normal);
+                            closest_normal = Some(normal);
                             closest_position = Some(world_pos);
                         }
                     }
