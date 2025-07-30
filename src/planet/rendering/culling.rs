@@ -1,4 +1,4 @@
-use crate::planet::meshing::mesh_renderer::VOXEL_SIZE;
+use crate::planet::meshing::render_voxels::VOXEL_SIZE;
 use bevy::prelude::*;
 
 /// Represents a 2D bounding box for chunk culling
@@ -19,7 +19,7 @@ impl Default for ChunkCullingBox {
         Self {
             center: Vec2::new(295.0, 0.0), // Very close to planet surface (radius=300)
             half_extents: Vec2::new(50.0, 50.0), // Smaller view area to focus on surface
-            padding: 20.0,                         // Smaller padding
+            padding: 20.0,                 // Smaller padding
             enabled: true,
         }
     }

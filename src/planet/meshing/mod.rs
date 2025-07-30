@@ -1,3 +1,3 @@
-pub mod dual_contourer;
-pub mod greedy_mesh;
+pub mod dual_contouring;
 pub mod mesh_renderer;
+pub mod render_voxels;

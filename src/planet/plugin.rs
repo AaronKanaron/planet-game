@@ -1,8 +1,6 @@
 use crate::planet::{
-    debug::{
-        DebugState, debug_input_system, setup_debug_ui, update_debug_info,
-    },
-    meshing::mesh_renderer::{MeshRenderer},
+    debug::{DebugPlugin, DebugState},
+    meshing::mesh_renderer::MeshRenderer,
     rendering::{
         culling::ChunkCullingBox,
         culling_system::{chunk_culling_system, culling_box_input_system, draw_culling_box_gizmo},
@@ -44,8 +42,8 @@ impl PlanetPlugin {
 
 impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(PlanetMaterialPlugin)
-            .add_systems(Startup, (Self::setup, setup_debug_ui))
+        app.add_plugins((PlanetMaterialPlugin, DebugPlugin))
+            .add_systems(Startup, Self::setup)
             .add_systems(
                 Update,
                 (
@@ -54,8 +52,6 @@ impl Plugin for PlanetPlugin {
                     MeshRenderer::render_mesh,
                     draw_culling_box_gizmo,
                     culling_box_input_system,
-                    debug_input_system,
-                    update_debug_info,
                 )
                     .chain(),
             ); // Use chain() to ensure proper ordering
