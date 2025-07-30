@@ -1,0 +1,37 @@
+use bevy::{color::palettes::tailwind::{{TILE_COLOR}}, prelude::*};
+use crate::tiles::data::GenericTileData;
+
+#[derive(Component)]
+pub struct {{TILE_NAME_STRUCT}} {
+    data: GenericTileData
+}
+
+impl {{TILE_NAME_STRUCT}} {
+    pub fn new(data: GenericTileData) -> Self {
+        Self { data }
+    }
+
+    fn spawn(
+        trigger: Trigger<OnAdd, Self>,
+        query: Query<&Self>,
+        mut commands: Commands
+    ) -> () {
+        let this = query.get(trigger.target()).unwrap();
+
+        commands.get_entity(trigger.target()).unwrap().insert((
+            Sprite {
+                color: {{TILE_COLOR}}.into(),
+                custom_size: Some(Vec2::splat(100.0)),
+                ..default()
+            },
+        ));
+    }
+}
+
+pub struct {{TILE_NAME_STRUCT}}Plugin;
+impl Plugin for {{TILE_NAME_STRUCT}}Plugin {
+    fn build(&self, app: &mut App) {
+        app
+            .add_observer({{TILE_NAME_STRUCT}}::spawn);
+    }
+}
