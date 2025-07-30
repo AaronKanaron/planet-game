@@ -1,16 +1,21 @@
 /* Imports */
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::planet::{
     meshing::{
-        dual_contouring::DualContouring, mesh_renderer::ChunkMesh, render_voxels::VOXEL_SIZE,
-        render_voxels::VoxelRenderer,
+        dual_contouring::{ContourCell, DualContouring, SharedVertexRegistry},
+        mesh_renderer::ChunkMesh,
+        render_voxels::{VOXEL_SIZE, VoxelRenderer},
     },
     rendering::{
         culling::ChunkCullingBox,
         materials::{CoreMaterial, DirtMaterial, GrassMaterial, RockMaterial},
     },
-    world::{chunk::CHUNK_SIZE, chunk_world::World, voxel::VoxelType},
+    world::{
+        chunk::{CHUNK_SIZE, Chunk},
+        chunk_world::World,
+        voxel::VoxelType,
+    },
 };
 
 /* Structs */
@@ -21,6 +26,8 @@ pub struct DebugState {
     pub show_interior_vertices: bool,
     pub show_contour_lines: bool,
     pub show_voxels: bool,
+    pub show_chunk_borders: bool,
+    pub show_border_intersections: bool,
 }
 
 #[derive(Component)]
@@ -51,6 +58,8 @@ impl Default for DebugState {
             show_interior_vertices: false,
             show_contour_lines: false,
             show_voxels: true, // Show voxels by default
+            show_chunk_borders: false,
+            show_border_intersections: false,
         }
     }
 }
@@ -101,7 +110,7 @@ impl DebugPlugin {
             };
 
             **text = format!(
-                "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nChunk Range: ({}, {}) to ({}, {})\n\nDebug Visualization:\nF1 - Contour Cells: {}\nF2 - Normals: {}\nF3 - Interior Vertices: {}\nF4 - Contour Lines: {}\nF5 - Voxels: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nI/O - Zoom in/out",
+                "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nChunk Range: ({}, {}) to ({}, {})\n\nDebug Visualization:\nF1 - Contour Cells: {}\nF2 - Normals: {}\nF3 - Interior Vertices: {}\nF4 - Contour Lines: {}\nF5 - Voxels: {}\nF6 - Chunk Borders: {}\nF7 - Border Intersections: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nI/O - Zoom in/out",
                 chunk_world.loaded_chunk_count(),
                 expected_chunks,
                 culling_box.center.x,
@@ -134,6 +143,16 @@ impl DebugPlugin {
                     "OFF"
                 },
                 if debug_state.show_voxels { "ON" } else { "OFF" },
+                if debug_state.show_chunk_borders {
+                    "ON"
+                } else {
+                    "OFF"
+                },
+                if debug_state.show_border_intersections {
+                    "ON"
+                } else {
+                    "OFF"
+                },
             );
         }
     }
@@ -183,11 +202,24 @@ impl DebugPlugin {
                 );
             }
         }
+
+        if keyboard_input.just_pressed(KeyCode::F6) {
+            debug_state.show_chunk_borders = !debug_state.show_chunk_borders;
+            info!("Chunk borders: {}", debug_state.show_chunk_borders);
+        }
+
+        if keyboard_input.just_pressed(KeyCode::F7) {
+            debug_state.show_border_intersections = !debug_state.show_border_intersections;
+            info!(
+                "Border intersections: {}",
+                debug_state.show_border_intersections
+            );
+        }
     }
 
     /// Render contour cells with debug toggles
     pub fn render_contour_cells(
-        contour_cells: &[crate::planet::meshing::dual_contouring::ContourCell],
+        contour_cells: &[ContourCell],
         chunk_x: i32,
         chunk_y: i32,
         gizmos: &mut Gizmos,
@@ -199,11 +231,9 @@ impl DebugPlugin {
             let world_y = (chunk_y * CHUNK_SIZE as i32 + cell.y as i32) as f32 * VOXEL_SIZE
                 + VOXEL_SIZE * 0.5;
 
-            // Draw cell boundary and corner indicators (F1 toggle)
             if debug_state.show_contour_cells {
                 let half_size = VOXEL_SIZE * 0.4;
 
-                // Draw cell boundary (green square)
                 let corners = [
                     Vec2::new(world_x - half_size, world_y - half_size),
                     Vec2::new(world_x + half_size, world_y - half_size),
@@ -217,7 +247,6 @@ impl DebugPlugin {
                     gizmos.line_2d(start, end, Color::srgb(0.0, 1.0, 0.0));
                 }
 
-                // Draw corner indicators (yellow/gray circles)
                 let corner_size = VOXEL_SIZE * 0.1;
                 let corner_positions = [
                     Vec2::new(world_x - half_size, world_y - half_size),
@@ -235,31 +264,27 @@ impl DebugPlugin {
                 }
             }
 
-            // Calculate absolute world position for interior vertex
             let chunk_world_x = chunk_x as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
             let chunk_world_y = chunk_y as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
             let cell_world_x = chunk_world_x + cell.x as f32 * VOXEL_SIZE;
             let cell_world_y = chunk_world_y + cell.y as f32 * VOXEL_SIZE;
 
-            // Convert from local coordinates (0-1) to world coordinates
             let absolute_vertex_pos = Vec2::new(
                 cell_world_x + cell.interior_vertex.x * VOXEL_SIZE,
                 cell_world_y + cell.interior_vertex.y * VOXEL_SIZE,
             );
 
-            // Draw interior vertex (F3 toggle)
             if debug_state.show_interior_vertices {
                 let vertex_size = VOXEL_SIZE * 0.15;
                 gizmos.circle_2d(absolute_vertex_pos, vertex_size, Color::srgb(1.0, 0.0, 0.0)); // Red circle
             }
 
-            // Draw normal vector (F2 toggle)
             if debug_state.show_normals {
                 let normal_length = VOXEL_SIZE * 0.8;
                 let normal_end = absolute_vertex_pos + cell.normal * normal_length;
-                gizmos.line_2d(absolute_vertex_pos, normal_end, Color::srgb(1.0, 0.0, 0.0)); // Red line
+                gizmos.line_2d(absolute_vertex_pos, normal_end, Color::srgb(1.0, 0.0, 0.0));
 
-                // Draw small arrowhead for normal direction
+                // arrowhead for normal direction
                 let arrow_size = VOXEL_SIZE * 0.1;
                 let perpendicular = Vec2::new(-cell.normal.y, cell.normal.x) * arrow_size;
                 let arrow_base = normal_end - cell.normal * arrow_size;
@@ -276,7 +301,6 @@ impl DebugPlugin {
             }
         }
 
-        // Draw contour lines connecting adjacent vertices (F4 toggle)
         if debug_state.show_contour_lines {
             Self::render_contour_lines(contour_cells, chunk_x, chunk_y, gizmos);
         }
@@ -284,13 +308,12 @@ impl DebugPlugin {
 
     /// Render contour lines connecting adjacent interior vertices
     fn render_contour_lines(
-        contour_cells: &[crate::planet::meshing::dual_contouring::ContourCell],
+        contour_cells: &[ContourCell],
         chunk_x: i32,
         chunk_y: i32,
         gizmos: &mut Gizmos,
     ) {
-        // Create a map of cell positions to their absolute vertex positions for quick lookup
-        let mut cell_vertices = std::collections::HashMap::new();
+        let mut cell_vertices = HashMap::new();
 
         for cell in contour_cells {
             let chunk_world_x = chunk_x as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
@@ -306,26 +329,21 @@ impl DebugPlugin {
             cell_vertices.insert((cell.x, cell.y), absolute_vertex_pos);
         }
 
-        // Connect adjacent vertices that share an edge
         for cell in contour_cells {
             let current_pos = cell_vertices.get(&(cell.x, cell.y)).unwrap();
 
-            // Check all 4 adjacent cells (right, up, left, down)
             let adjacents = [
-                (cell.x + 1, cell.y),             // right
-                (cell.x, cell.y + 1),             // up
-                (cell.x.wrapping_sub(1), cell.y), // left (with underflow protection)
-                (cell.x, cell.y.wrapping_sub(1)), // down (with underflow protection)
+                (cell.x + 1, cell.y),
+                (cell.x, cell.y + 1),
+                (cell.x.wrapping_sub(1), cell.y),
+                (cell.x, cell.y.wrapping_sub(1)),
             ];
 
             for &(adj_x, adj_y) in &adjacents {
-                // Only draw lines to right and up neighbors to avoid drawing each line twice
                 if (adj_x == cell.x + 1 && adj_y == cell.y)
                     || (adj_x == cell.x && adj_y == cell.y + 1)
                 {
                     if let Some(adj_pos) = cell_vertices.get(&(adj_x, adj_y)) {
-                        // Check if the edge between these cells should have a contour line
-                        // This happens when the cells share a common edge with a sign change
                         if Self::should_connect_vertices(cell, adj_x, adj_y, contour_cells) {
                             gizmos.line_2d(*current_pos, *adj_pos, Color::srgb(0.0, 0.8, 1.0)); // Cyan contour lines
                         }
@@ -337,23 +355,15 @@ impl DebugPlugin {
 
     /// Check if two adjacent cells should be connected with a contour line
     fn should_connect_vertices(
-        cell: &crate::planet::meshing::dual_contouring::ContourCell,
+        cell: &ContourCell,
         adj_x: usize,
         adj_y: usize,
-        all_cells: &[crate::planet::meshing::dual_contouring::ContourCell],
+        all_cells: &[ContourCell],
     ) -> bool {
-        // Find the adjacent cell
         if let Some(_adj_cell) = all_cells.iter().find(|c| c.x == adj_x && c.y == adj_y) {
-            // Two contour cells should be connected if they share a common edge
-            // and both have interior vertices (which they do, since they're both contour cells)
-
-            // Determine which edge they share
             if adj_x == cell.x + 1 && adj_y == cell.y {
-                // Adjacent to the right - they share the right edge of current cell
-                // Connect if both cells exist (which they do)
                 true
             } else if adj_x == cell.x && adj_y == cell.y + 1 {
-                // Adjacent upward - they share the top edge of current cell
                 true
             } else {
                 false
@@ -363,29 +373,140 @@ impl DebugPlugin {
         }
     }
 
+    fn render_chunk_borders(loaded_chunks: &HashMap<(i32, i32), Chunk>, gizmos: &mut Gizmos) {
+        use std::collections::HashSet;
+        let mut drawn_horizontal_lines = HashSet::new();
+        let mut drawn_vertical_lines = HashSet::new();
+
+        for (&(chunk_x, chunk_y), _chunk) in loaded_chunks {
+            let chunk_world_x = chunk_x as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
+            let chunk_world_y = chunk_y as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
+            let chunk_size_world = CHUNK_SIZE as f32 * VOXEL_SIZE;
+
+            let left_x = chunk_world_x;
+            let right_x = chunk_world_x + chunk_size_world;
+            let bottom_y = chunk_world_y;
+            let top_y = chunk_world_y + chunk_size_world;
+
+            let left_line_key = (left_x as i32, bottom_y as i32, top_y as i32, true);
+            if !drawn_vertical_lines.contains(&left_line_key) {
+                gizmos.line_2d(
+                    Vec2::new(left_x, bottom_y),
+                    Vec2::new(left_x, top_y),
+                    Color::srgb(0.8, 0.8, 0.0),
+                );
+                drawn_vertical_lines.insert(left_line_key);
+            }
+
+            let right_line_key = (right_x as i32, bottom_y as i32, top_y as i32, true);
+            if !drawn_vertical_lines.contains(&right_line_key) {
+                gizmos.line_2d(
+                    Vec2::new(right_x, bottom_y),
+                    Vec2::new(right_x, top_y),
+                    Color::srgb(0.8, 0.8, 0.0),
+                );
+                drawn_vertical_lines.insert(right_line_key);
+            }
+
+            let bottom_line_key = (left_x as i32, right_x as i32, bottom_y as i32, false);
+            if !drawn_horizontal_lines.contains(&bottom_line_key) {
+                gizmos.line_2d(
+                    Vec2::new(left_x, bottom_y),
+                    Vec2::new(right_x, bottom_y),
+                    Color::srgb(0.8, 0.8, 0.0),
+                );
+                drawn_horizontal_lines.insert(bottom_line_key);
+            }
+
+            let top_line_key = (left_x as i32, right_x as i32, top_y as i32, false);
+            if !drawn_horizontal_lines.contains(&top_line_key) {
+                gizmos.line_2d(
+                    Vec2::new(left_x, top_y),
+                    Vec2::new(right_x, top_y),
+                    Color::srgb(0.8, 0.8, 0.0),
+                );
+                drawn_horizontal_lines.insert(top_line_key);
+            }
+        }
+    }
+
     /// System to render contour gizmos with debug toggles
     pub fn render_contour_gizmos_system(
-        world: Res<World>,
+        world: ResMut<World>,
         debug_state: Res<DebugState>,
         mut gizmos: Gizmos,
     ) {
-        // Only render if any debug features are enabled
+        if debug_state.show_chunk_borders {
+            Self::render_chunk_borders(&world.loaded_chunks, &mut gizmos);
+        }
+
         if !debug_state.show_contour_cells
             && !debug_state.show_normals
             && !debug_state.show_interior_vertices
             && !debug_state.show_contour_lines
+            && !debug_state.show_border_intersections
         {
             return;
         }
 
-        // Render contour cells for all loaded chunks using neighbor-aware detection
-        for (&(chunk_x, chunk_y), _chunk) in &world.loaded_chunks {
-            let contour_cells = DualContouring::find_contour_cells(&world, chunk_x, chunk_y);
-            Self::render_contour_cells(&contour_cells, chunk_x, chunk_y, &mut gizmos, &debug_state);
+        if debug_state.show_border_intersections {
+            let chunk_positions: Vec<(i32, i32)> = world.loaded_chunks.keys().cloned().collect();
+
+            for (chunk_x, chunk_y) in chunk_positions {
+                let mut temp_registry = SharedVertexRegistry::new(); // TODO; do not make a temporary registry every time, instead reuse a single instance
+
+                let (contour_cells, border_intersections) =
+                    DualContouring::find_contour_cells_with_borders(
+                        &*world,
+                        chunk_x,
+                        chunk_y,
+                        &mut temp_registry,
+                    );
+
+                Self::render_contour_cells(
+                    &contour_cells,
+                    chunk_x,
+                    chunk_y,
+                    &mut gizmos,
+                    &debug_state,
+                );
+
+                //draw the border intersections
+                for intersection in &border_intersections {
+                    gizmos.circle_2d(
+                        intersection.world_position,
+                        VOXEL_SIZE * 0.2,
+                        Color::srgb(1.0, 0.0, 1.0),
+                    );
+
+                    let cross_size = VOXEL_SIZE * 0.15;
+                    gizmos.line_2d(
+                        intersection.world_position - Vec2::new(cross_size, 0.0),
+                        intersection.world_position + Vec2::new(cross_size, 0.0),
+                        Color::srgb(1.0, 0.0, 1.0),
+                    );
+                    gizmos.line_2d(
+                        intersection.world_position - Vec2::new(0.0, cross_size),
+                        intersection.world_position + Vec2::new(0.0, cross_size),
+                        Color::srgb(1.0, 0.0, 1.0),
+                    );
+                }
+            }
+        } else {
+            // Use the standard dual contouring system
+            for (&(chunk_x, chunk_y), _chunk) in &world.loaded_chunks {
+                let contour_cells = DualContouring::find_contour_cells(&world, chunk_x, chunk_y);
+                Self::render_contour_cells(
+                    &contour_cells,
+                    chunk_x,
+                    chunk_y,
+                    &mut gizmos,
+                    &debug_state,
+                );
+            }
         }
     }
 
-    /// System to render voxels with debug toggle
     pub fn render_voxels_system(
         mut commands: Commands,
         mut world: ResMut<World>,
@@ -398,7 +519,6 @@ impl DebugPlugin {
         existing_chunks: Query<(Entity, &ChunkMesh)>,
     ) {
         if !debug_state.show_voxels {
-            // If voxels are disabled, despawn all existing voxel meshes
             for (entity, _) in existing_chunks.iter() {
                 commands.entity(entity).despawn();
             }
@@ -410,16 +530,13 @@ impl DebugPlugin {
             return;
         }
 
-        // Despawn dirty chunks
         for (entity, chunk_mesh) in existing_chunks.iter() {
             if dirty_chunks.contains(&(chunk_mesh.chunk_x, chunk_mesh.chunk_y)) {
                 commands.entity(entity).despawn();
             }
         }
 
-        // Regenerate meshes for dirty chunks only
         for &(chunk_x, chunk_y) in &dirty_chunks {
-            // Skip if chunk is no longer loaded (might have been unloaded)
             if !world.is_chunk_loaded(chunk_x, chunk_y) {
                 continue;
             }

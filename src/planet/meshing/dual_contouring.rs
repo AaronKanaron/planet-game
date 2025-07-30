@@ -3,8 +3,7 @@ use crate::planet::{
     meshing::render_voxels::VOXEL_SIZE,
     world::{chunk::CHUNK_SIZE, chunk_world::World},
 };
-use bevy::{prelude::*, utils::HashMap};
-use std::sync::{Arc, Mutex};
+use bevy::{platform::collections::HashMap, prelude::*};
 
 /* Structs */
 #[derive(Debug, Clone)]
@@ -22,10 +21,179 @@ pub struct EdgeIntersection {
     pub normal: Vec2,
 }
 
+/// Snapped coordinate for consistent vertex positioning across chunks
+/// Uses fixed-point integer coordinates (multiplied by 1000) for HashMap keys
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SnappedCoord {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl SnappedCoord {
+    pub fn from_world_pos(pos: Vec2) -> Self {
+        Self {
+            x: (pos.x * 1000.0) as i32,
+            y: (pos.y * 1000.0) as i32,
+        }
+    }
+
+    pub fn to_world_pos(&self) -> Vec2 {
+        Vec2::new(self.x as f32 / 1000.0, self.y as f32 / 1000.0)
+    }
+}
+
+/// Represents a vertex on a chunk border that can be shared
+#[derive(Debug, Clone)]
+pub struct BorderVertex {
+    pub world_position: Vec2,
+    pub normal: Vec2,
+    pub vertex_id: usize,
+}
+
+/// Global registry for shared border vertices
+#[derive(Debug, Default)]
+pub struct SharedVertexRegistry {
+    vertices: HashMap<SnappedCoord, BorderVertex>,
+    next_vertex_id: usize,
+}
+
+impl SharedVertexRegistry {
+    pub fn new() -> Self {
+        Self {
+            vertices: HashMap::new(),
+            next_vertex_id: 0,
+        }
+    }
+
+    /// Get or create a shared vertex at the given snapped coordinate
+    pub fn get_or_create_vertex(
+        &mut self,
+        coord: SnappedCoord,
+        world_pos: Vec2,
+        normal: Vec2,
+    ) -> usize {
+        if let Some(vertex) = self.vertices.get(&coord) {
+            vertex.vertex_id
+        } else {
+            let vertex_id = self.next_vertex_id;
+            self.next_vertex_id += 1;
+
+            self.vertices.insert(
+                coord,
+                BorderVertex {
+                    world_position: world_pos,
+                    normal,
+                    vertex_id,
+                },
+            );
+
+            vertex_id
+        }
+    }
+
+    /// Get a vertex
+    pub fn get_vertex(&self, coord: &SnappedCoord) -> Option<&BorderVertex> {
+        self.vertices.get(coord)
+    }
+}
+
+/// Information about a border intersection
+#[derive(Debug, Clone)]
+pub struct BorderIntersection {
+    pub world_position: Vec2,
+    pub normal: Vec2,
+    pub edge_type: BorderEdgeType,
+    pub snapped_coord: SnappedCoord,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BorderEdgeType {
+    Left,   // x = 0
+    Right,  // x = CHUNK_SIZE
+    Bottom, // y = 0
+    Top,    // y = CHUNK_SIZE
+}
+
 pub struct DualContouring;
 
 /* Implementations */
 impl DualContouring {
+    /// Find contour cells and detect border intersections for shared vertex system
+    pub fn find_contour_cells_with_borders(
+        world: &World,
+        chunk_x: i32,
+        chunk_y: i32,
+        vertex_registry: &mut SharedVertexRegistry,
+    ) -> (Vec<ContourCell>, Vec<BorderIntersection>) {
+        let mut contour_cells = Vec::new();
+        let mut border_intersections = Vec::new();
+
+        contour_cells.reserve(CHUNK_SIZE * CHUNK_SIZE / 4);
+
+        let mut prev_row = vec![None; CHUNK_SIZE + 1];
+        let mut curr_row = vec![None; CHUNK_SIZE + 1];
+
+        for x in 0..=CHUNK_SIZE {
+            prev_row[x] = Self::try_get_voxel(world, chunk_x, chunk_y, x as i32, 0);
+        }
+
+        for y in 0..CHUNK_SIZE {
+            for x in 0..=CHUNK_SIZE {
+                curr_row[x] =
+                    Self::try_get_voxel(world, chunk_x, chunk_y, x as i32, (y + 1) as i32);
+            }
+
+            for x in 0..CHUNK_SIZE {
+                let corner_opts = [prev_row[x], prev_row[x + 1], curr_row[x], curr_row[x + 1]];
+
+                if corner_opts.iter().any(|opt| opt.is_none()) {
+                    // skip if any corner is in an unloaded chunk
+                    continue;
+                }
+
+                let corners = [
+                    corner_opts[0].unwrap(),
+                    corner_opts[1].unwrap(),
+                    corner_opts[2].unwrap(),
+                    corner_opts[3].unwrap(),
+                ];
+
+                let first_corner = corners[0];
+                let has_sign_change = corners[1] != first_corner
+                    || corners[2] != first_corner
+                    || corners[3] != first_corner;
+
+                if has_sign_change {
+                    let (interior_vertex, normal) =
+                        Self::solve_qef_for_cell(world, chunk_x, chunk_y, x, y, &corners);
+
+                    let cell_border_intersections = Self::find_border_intersections(
+                        world,
+                        chunk_x,
+                        chunk_y,
+                        x,
+                        y,
+                        &corners,
+                        vertex_registry,
+                    );
+                    border_intersections.extend(cell_border_intersections);
+
+                    contour_cells.push(ContourCell {
+                        x,
+                        y,
+                        corner_values: corners,
+                        interior_vertex,
+                        normal,
+                    });
+                }
+            }
+
+            std::mem::swap(&mut prev_row, &mut curr_row);
+        }
+
+        (contour_cells, border_intersections)
+    }
+
     pub fn find_contour_cells(world: &World, chunk_x: i32, chunk_y: i32) -> Vec<ContourCell> {
         let mut contour_cells = Vec::new();
 
@@ -45,12 +213,7 @@ impl DualContouring {
             }
 
             for x in 0..CHUNK_SIZE {
-                let corner_opts = [
-                    prev_row[x],     // bottom-left  (y, x)
-                    prev_row[x + 1], // bottom-right (y, x+1)
-                    curr_row[x],     // top-left     (y+1, x)
-                    curr_row[x + 1], // top-right    (y+1, x+1)
-                ];
+                let corner_opts = [prev_row[x], prev_row[x + 1], curr_row[x], curr_row[x + 1]];
 
                 if corner_opts.iter().any(|opt| opt.is_none()) {
                     // skip if any corner is in an unloaded chunk
@@ -145,7 +308,6 @@ impl DualContouring {
         None
     }
 
-    /// Find edge intersections and solve QEF to place interior vertex
     fn solve_qef_for_cell(
         world: &World,
         chunk_x: i32,
@@ -154,20 +316,17 @@ impl DualContouring {
         cell_y: usize,
         corners: &[bool; 4],
     ) -> (Vec2, Vec2) {
-        // Find all edge intersections in this cell
         let intersections =
             Self::find_edge_intersections(world, chunk_x, chunk_y, cell_x, cell_y, corners);
 
         if intersections.is_empty() {
-            // Fallback to cell center if no intersections found
             let cell_center = Vec2::new(
                 (cell_x as f32 + 0.5) * VOXEL_SIZE,
                 (cell_y as f32 + 0.5) * VOXEL_SIZE,
             );
-            return (cell_center, Vec2::Y); // Default normal pointing up
+            return (cell_center, Vec2::Y);
         }
 
-        // Solve QEF using the edge intersections
         Self::solve_qef(&intersections, cell_x, cell_y)
     }
 
@@ -182,14 +341,7 @@ impl DualContouring {
     ) -> Vec<EdgeIntersection> {
         let mut intersections = Vec::new();
 
-        // Check each of the 4 edges of the cell
-        // Edge indices: 0=bottom, 1=right, 2=top, 3=left
-        let edges = [
-            (0, 1), // bottom edge: bottom-left to bottom-right
-            (1, 3), // right edge: bottom-right to top-right
-            (3, 2), // top edge: top-right to top-left
-            (2, 0), // left edge: top-left to bottom-left
-        ];
+        let edges = [(0, 1), (1, 3), (3, 2), (2, 0)];
 
         for (edge_idx, (corner1_idx, corner2_idx)) in edges.iter().enumerate() {
             let corner1_solid = corners[*corner1_idx];
@@ -225,22 +377,19 @@ impl DualContouring {
         _corner1_idx: usize,
         _corner2_idx: usize,
     ) -> EdgeIntersection {
-        // Calculate local position within the cell (0.0 to 1.0)
         let local_pos = match edge_idx {
-            0 => Vec2::new(0.5, 0.0), // middle of bottom edge
-            1 => Vec2::new(1.0, 0.5), // middle of right edge
-            2 => Vec2::new(0.5, 1.0), // middle of top edge
-            3 => Vec2::new(0.0, 0.5), // middle of left edge
+            0 => Vec2::new(0.5, 0.0),
+            1 => Vec2::new(1.0, 0.5),
+            2 => Vec2::new(0.5, 1.0),
+            3 => Vec2::new(0.0, 0.5),
             _ => unreachable!(),
         };
 
-        // Calculate world position of the intersection for SDF sampling
         let world_pos = Vec2::new(
             (cell_x as f32 + local_pos.x) as f32,
             (cell_y as f32 + local_pos.y) as f32,
         );
 
-        // Calculate proper SDF gradient at this intersection point
         let normal = Self::calculate_sdf_gradient(world, chunk_x, chunk_y, world_pos);
 
         EdgeIntersection {
@@ -250,68 +399,58 @@ impl DualContouring {
     }
 
     /// Calculate SDF gradient at a specific world position for proper normal computation
-    /// Uses a larger sampling pattern for smoother gradients
     fn calculate_sdf_gradient(world: &World, chunk_x: i32, chunk_y: i32, world_pos: Vec2) -> Vec2 {
-        // Use smaller epsilon for finer gradient estimation
         let epsilon = 0.05;
 
-        // Sample SDF in a 3x3 pattern around the point for better gradient estimation
         let samples = [
-            // Center cross pattern
-            Self::sample_sdf(world, chunk_x, chunk_y, world_pos.x - epsilon, world_pos.y), // left
-            Self::sample_sdf(world, chunk_x, chunk_y, world_pos.x + epsilon, world_pos.y), // right
-            Self::sample_sdf(world, chunk_x, chunk_y, world_pos.x, world_pos.y - epsilon), // down
-            Self::sample_sdf(world, chunk_x, chunk_y, world_pos.x, world_pos.y + epsilon), // up
-            // Diagonal samples for better smoothing
+            Self::sample_sdf(world, chunk_x, chunk_y, world_pos.x - epsilon, world_pos.y),
+            Self::sample_sdf(world, chunk_x, chunk_y, world_pos.x + epsilon, world_pos.y),
+            Self::sample_sdf(world, chunk_x, chunk_y, world_pos.x, world_pos.y - epsilon),
+            Self::sample_sdf(world, chunk_x, chunk_y, world_pos.x, world_pos.y + epsilon),
             Self::sample_sdf(
                 world,
                 chunk_x,
                 chunk_y,
                 world_pos.x - epsilon,
                 world_pos.y - epsilon,
-            ), // bottom-left
+            ),
             Self::sample_sdf(
                 world,
                 chunk_x,
                 chunk_y,
                 world_pos.x + epsilon,
                 world_pos.y - epsilon,
-            ), // bottom-right
+            ),
             Self::sample_sdf(
                 world,
                 chunk_x,
                 chunk_y,
                 world_pos.x - epsilon,
                 world_pos.y + epsilon,
-            ), // top-left
+            ),
             Self::sample_sdf(
                 world,
                 chunk_x,
                 chunk_y,
                 world_pos.x + epsilon,
                 world_pos.y + epsilon,
-            ), // top-right
+            ),
         ];
 
-        // Calculate gradient using weighted central differences with diagonal smoothing
-        let dx_main = (samples[1] - samples[0]) / (2.0 * epsilon); // right - left
-        let dy_main = (samples[3] - samples[2]) / (2.0 * epsilon); // up - down
+        let dx_main = (samples[1] - samples[0]) / (2.0 * epsilon);
+        let dy_main = (samples[3] - samples[2]) / (2.0 * epsilon);
 
-        // Diagonal contributions (weighted less for smoothing)
         let dx_diag = ((samples[5] + samples[7]) - (samples[4] + samples[6])) / (4.0 * epsilon);
         let dy_diag = ((samples[6] + samples[7]) - (samples[4] + samples[5])) / (4.0 * epsilon);
 
-        // Combine main and diagonal gradients with weights
         let dx = dx_main * 0.7 + dx_diag * 0.3;
         let dy = dy_main * 0.7 + dy_diag * 0.3;
 
         let gradient = Vec2::new(dx, dy);
 
-        // Normalize the gradient to get the surface normal
         if gradient.length() > 0.001 {
             gradient.normalize()
         } else {
-            // Fallback normal calculation if gradient is too small
             Vec2::Y
         }
     }
@@ -319,19 +458,15 @@ impl DualContouring {
     /// Sample the Signed Distance Field at a specific world position
     /// Uses smoothed sampling for better continuity
     fn sample_sdf(world: &World, chunk_x: i32, chunk_y: i32, world_x: f32, world_y: f32) -> f32 {
-        // Convert world position to voxel coordinates
         let voxel_x = world_x.floor() as i32;
         let voxel_y = world_y.floor() as i32;
 
-        // Get the fractional part for interpolation
         let fx = world_x - voxel_x as f32;
         let fy = world_y - voxel_y as f32;
 
-        // Apply smoothstep for smoother interpolation curves
-        let smooth_fx = fx * fx * (3.0 - 2.0 * fx); // smoothstep
-        let smooth_fy = fy * fy * (3.0 - 2.0 * fy); // smoothstep
+        let smooth_fx = fx * fx * (3.0 - 2.0 * fx);
+        let smooth_fy = fy * fy * (3.0 - 2.0 * fy);
 
-        // Sample a 3x3 grid around the point for better filtering
         let mut weighted_sum = 0.0;
         let mut total_weight = 0.0;
 
@@ -344,12 +479,10 @@ impl DualContouring {
                     .map(|solid| if solid { -1.0 } else { 1.0 })
                     .unwrap_or(0.0);
 
-                // Calculate distance-based weight
                 let dist_x = (dx as f32 - fx).abs();
                 let dist_y = (dy as f32 - fy).abs();
                 let distance = (dist_x * dist_x + dist_y * dist_y).sqrt();
 
-                // Use gaussian-like weighting for smooth falloff
                 let weight = (-distance * distance * 2.0).exp();
 
                 weighted_sum += voxel_value * weight;
@@ -360,7 +493,6 @@ impl DualContouring {
         if total_weight > 0.001 {
             weighted_sum / total_weight
         } else {
-            // Fallback to simple bilinear interpolation
             let v00 = Self::try_get_voxel(world, chunk_x, chunk_y, voxel_x, voxel_y)
                 .map(|solid| if solid { -1.0 } else { 1.0 })
                 .unwrap_or(0.0);
@@ -374,10 +506,131 @@ impl DualContouring {
                 .map(|solid| if solid { -1.0 } else { 1.0 })
                 .unwrap_or(0.0);
 
-            // Use smoothed interpolation
             let v0 = v00 * (1.0 - smooth_fx) + v10 * smooth_fx;
             let v1 = v01 * (1.0 - smooth_fx) + v11 * smooth_fx;
             v0 * (1.0 - smooth_fy) + v1 * smooth_fy
+        }
+    }
+
+    /// Find border intersections for the given cell and register them in the shared vertex system
+    fn find_border_intersections(
+        world: &World,
+        chunk_x: i32,
+        chunk_y: i32,
+        cell_x: usize,
+        cell_y: usize,
+        corners: &[bool; 4],
+        vertex_registry: &mut SharedVertexRegistry,
+    ) -> Vec<BorderIntersection> {
+        let mut border_intersections = Vec::new();
+
+        let edges = [(0, 1, 0), (1, 3, 1), (3, 2, 2), (2, 0, 3)];
+
+        for (corner1_idx, corner2_idx, edge_idx) in edges.iter() {
+            let corner1_solid = corners[*corner1_idx];
+            let corner2_solid = corners[*corner2_idx];
+
+            if corner1_solid != corner2_solid {
+                if let Some(border_type) = Self::get_border_type(cell_x, cell_y, *edge_idx) {
+                    let intersection = Self::calculate_edge_intersection(
+                        world,
+                        chunk_x,
+                        chunk_y,
+                        cell_x,
+                        cell_y,
+                        *edge_idx,
+                        *corner1_idx,
+                        *corner2_idx,
+                    );
+
+                    let world_pos = Vec2::new(
+                        (chunk_x * CHUNK_SIZE as i32) as f32
+                            + (cell_x as f32 + intersection.position.x) * VOXEL_SIZE,
+                        (chunk_y * CHUNK_SIZE as i32) as f32
+                            + (cell_y as f32 + intersection.position.y) * VOXEL_SIZE,
+                    );
+
+                    let snapped_coord = SnappedCoord::from_world_pos(world_pos);
+
+                    let _vertex_id = vertex_registry.get_or_create_vertex(
+                        snapped_coord,
+                        world_pos,
+                        intersection.normal,
+                    );
+
+                    border_intersections.push(BorderIntersection {
+                        world_position: world_pos,
+                        normal: intersection.normal,
+                        edge_type: border_type,
+                        snapped_coord,
+                    });
+                }
+            }
+        }
+
+        border_intersections
+    }
+
+    /// Determine if an edge crosses a chunk boundary and return the border type
+    fn get_border_type(cell_x: usize, cell_y: usize, edge_idx: usize) -> Option<BorderEdgeType> {
+        match edge_idx {
+            0 => {
+                if cell_y == 0 {
+                    Some(BorderEdgeType::Bottom)
+                } else {
+                    None
+                }
+            }
+            1 => {
+                if cell_x == CHUNK_SIZE - 1 {
+                    Some(BorderEdgeType::Right)
+                } else {
+                    None
+                }
+            }
+            2 => {
+                if cell_y == CHUNK_SIZE - 1 {
+                    Some(BorderEdgeType::Top)
+                } else {
+                    None
+                }
+            }
+            3 => {
+                if cell_x == 0 {
+                    Some(BorderEdgeType::Left)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Calculate exact intersection point using line-line intersection for border edges
+    fn calculate_border_intersection(
+        p1: Vec2,
+        p2: Vec2,
+        border_line_start: Vec2,
+        border_line_end: Vec2,
+    ) -> Option<Vec2> {
+        let s1 = p2 - p1;
+        let s2 = border_line_end - border_line_start;
+
+        let denominator = s1.x * s2.y - s2.x * s1.y;
+
+        if denominator.abs() < 0.0001 {
+            return None;
+        }
+
+        let t = ((border_line_start.x - p1.x) * s2.y - (border_line_start.y - p1.y) * s2.x)
+            / denominator;
+        let u = ((border_line_start.x - p1.x) * s1.y - (border_line_start.y - p1.y) * s1.x)
+            / denominator;
+
+        if t >= 0.0 && t <= 1.0 && u >= 0.0 && u <= 1.0 {
+            Some(p1 + s1 * t)
+        } else {
+            None
         }
     }
 
@@ -388,20 +641,15 @@ impl DualContouring {
         _cell_y: usize,
     ) -> (Vec2, Vec2) {
         if intersections.is_empty() {
-            let center = Vec2::new(0.5, 0.5); // Center in local coordinates
+            let center = Vec2::new(0.5, 0.5);
             return (center, Vec2::Y);
         }
-
-        // For better vertex placement, we'll solve a weighted least squares problem
-        // The goal is to find a point that minimizes the distance to all the planes
-        // defined by the intersection points and their normals
 
         let mut vertex_pos = Vec2::ZERO;
         let mut total_weight = 0.0;
 
-        // First pass: weighted average of intersection positions
         for intersection in intersections {
-            let weight = 1.0; // Equal weights for now, could be based on edge length or importance
+            let weight = 1.0;
             vertex_pos += intersection.position * weight;
             total_weight += weight;
         }
@@ -412,17 +660,14 @@ impl DualContouring {
             vertex_pos = Vec2::new(0.5, 0.5);
         }
 
-        // Second pass: iterative refinement using constraint projection
         for _iteration in 0..3 {
             let mut correction = Vec2::ZERO;
             let mut correction_weight = 0.0;
 
             for intersection in intersections {
-                // Calculate how far the current vertex is from the constraint plane
                 let to_intersection = intersection.position - vertex_pos;
                 let distance_along_normal = to_intersection.dot(intersection.normal);
 
-                // Project correction along the normal
                 let constraint_correction = intersection.normal * distance_along_normal * 0.3; // Damping factor
 
                 correction += constraint_correction;
@@ -434,14 +679,12 @@ impl DualContouring {
             }
         }
 
-        // Calculate final normal as weighted average
         let mut avg_normal = Vec2::ZERO;
         let mut normal_weight = 0.0;
 
         for intersection in intersections {
-            // Weight normals by how close they are to the final vertex position
             let distance = (intersection.position - vertex_pos).length();
-            let weight = 1.0 / (1.0 + distance * 2.0); // Closer intersections have more influence
+            let weight = 1.0 / (1.0 + distance * 2.0);
 
             avg_normal += intersection.normal * weight;
             normal_weight += weight;
@@ -453,17 +696,14 @@ impl DualContouring {
             Vec2::Y
         };
 
-        // Constrain the vertex to stay within the cell bounds with smooth clamping
-        let margin = 0.1; // Small margin from edges for stability
+        let margin = 0.1;
         let constrained_pos = Vec2::new(
             vertex_pos.x.clamp(margin, 1.0 - margin),
             vertex_pos.y.clamp(margin, 1.0 - margin),
         );
 
-        // Apply smoothstep near boundaries for smoother transitions
         let final_pos = Vec2::new(
             if constrained_pos.x < 0.2 || constrained_pos.x > 0.8 {
-                // Apply smoothing near boundaries
                 let t = if constrained_pos.x < 0.5 {
                     constrained_pos.x * 5.0
                 } else {
@@ -496,5 +736,20 @@ impl DualContouring {
         );
 
         (final_pos, final_normal)
+    }
+
+    /// Helper method to get shared vertex information for a specific coordinate
+    pub fn get_shared_vertex_info(
+        world: &World,
+        snapped_coord: SnappedCoord,
+    ) -> Option<&BorderVertex> {
+        world.get_vertex_registry().get_vertex(&snapped_coord)
+    }
+
+    /// Clear the shared vertex registry (useful when regenerating large areas)
+    pub fn clear_vertex_registry(world: &mut World) {
+        let registry = world.get_vertex_registry_mut();
+        registry.vertices.clear();
+        registry.next_vertex_id = 0;
     }
 }

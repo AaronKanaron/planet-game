@@ -1,7 +1,10 @@
-use crate::planet::rendering::culling::ChunkCullingBox;
-use crate::planet::world::{
-    chunk::{CHUNK_SIZE, Chunk},
-    voxel::VoxelType,
+use crate::planet::{
+    meshing::dual_contouring::SharedVertexRegistry,
+    rendering::culling::ChunkCullingBox,
+    world::{
+        chunk::{CHUNK_SIZE, Chunk},
+        voxel::VoxelType,
+    },
 };
 use bevy::{platform::collections::HashMap, prelude::*};
 use noise::Perlin;
@@ -12,6 +15,9 @@ pub struct World {
     pub loaded_chunks: HashMap<(i32, i32), Chunk>,
 
     pub noise: Perlin,
+
+    /// Shared vertex registry for border vertices
+    pub vertex_registry: SharedVertexRegistry,
 }
 
 impl World {
@@ -19,6 +25,7 @@ impl World {
         Self {
             loaded_chunks: HashMap::new(),
             noise: Perlin::new(42),
+            vertex_registry: SharedVertexRegistry::new(),
         }
     }
 
@@ -79,6 +86,16 @@ impl World {
         if let Some(chunk) = self.loaded_chunks.get_mut(&(chunk_x, chunk_y)) {
             chunk.mark_clean();
         }
+    }
+
+    /// Get mutable access to the shared vertex registry
+    pub fn get_vertex_registry_mut(&mut self) -> &mut SharedVertexRegistry {
+        &mut self.vertex_registry
+    }
+
+    /// Get immutable access to the shared vertex registry
+    pub fn get_vertex_registry(&self) -> &SharedVertexRegistry {
+        &self.vertex_registry
     }
 
     /// Mark neighboring chunks as dirty when a voxel near chunk boundaries is modified.
