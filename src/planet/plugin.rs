@@ -5,7 +5,7 @@ use crate::planet::{
         culling_system::{chunk_culling_system, culling_box_input_system, draw_culling_box_gizmo},
         materials::PlanetMaterialPlugin,
     },
-    world::{chunk::Chunk, chunk_world::World},
+    world::chunk_world::World,
 };
 
 use bevy::prelude::*;
@@ -49,6 +49,6 @@ impl Plugin for PlanetPlugin {
                     culling_box_input_system,
                 )
                     .chain(),
-            ); // Use chain() to ensure proper ordering
+            );
     }
 }

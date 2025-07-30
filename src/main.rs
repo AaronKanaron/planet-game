@@ -1,16 +1,19 @@
 mod camera;
 mod planet;
+mod tiles;
 mod utils;
 
 use bevy::input::ButtonInput;
 use bevy::prelude::*;
 use bevy::window::WindowPlugin;
 
-use crate::camera::CameraPlugin;
 use crate::planet::plugin::PlanetPlugin;
 use crate::planet::rendering::culling::ChunkCullingBox;
 use crate::planet::world::chunk_world::World;
 use crate::planet::{meshing::render_voxels::VOXEL_SIZE, world::voxel::VoxelType};
+use crate::tiles::TilePlugin;
+use crate::tiles::data::GenericTileData;
+use crate::tiles::variants::debug::DebugTile;
 use crate::utils::debug::plugin::DebugPlugin;
 
 fn main() {
@@ -27,8 +30,7 @@ fn main() {
                 })
                 .set(ImagePlugin::default_nearest()),
         )
-        .add_plugins(DebugPlugin)
-        .add_plugins(PlanetPlugin)
+        .add_plugins((DebugPlugin, PlanetPlugin, TilePlugin))
         // .add_plugins(CameraPlugin)
         .add_systems(Startup, setup)
         .add_systems(Update, (handle_input, follow_culling_center, handle_zoom))
@@ -45,6 +47,8 @@ fn setup(mut commands: Commands) {
         Transform::default(),
         GlobalTransform::default(),
     ));
+
+    commands.spawn(DebugTile::new(GenericTileData::new(0, true)));
 }
 
 fn handle_input(
