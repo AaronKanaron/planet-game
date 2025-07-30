@@ -14,24 +14,22 @@ pub struct PlanetPlugin;
 
 impl PlanetPlugin {
     fn setup(mut commands: Commands) {
-        let mut world = World::new();
+        let world = World::new();
 
         // Load initial chunks in a smaller area since we'll use culling
-        for cx in 0..4 {
-            for cy in 0..4 {
-                let chunk = Chunk::generate(cx as i32, cy as i32, &world.noise);
-                world.loaded_chunks.insert((cx as i32, cy as i32), chunk);
-            }
-        }
+        // for cx in 0..4 {
+        //     for cy in 0..4 {
+        //         let chunk = Chunk::generate(cx as i32, cy as i32, &world.noise);
+        //         world.loaded_chunks.insert((cx as i32, cy as i32), chunk);
+        //     }
+        // }
 
         // Mark all chunks as dirty so they get rendered on the first frame
         // world.mark_all_chunks_dirty();
 
         commands.insert_resource(world);
 
-        // Initialize the culling box resource - start close to planet surface
-        // Position the culling box closer to the planet surface to see terrain details
-        let culling_box = ChunkCullingBox::new(Vec2::new(280.0, 0.0), Vec2::new(100.0, 100.0));
+        let culling_box = ChunkCullingBox::new(Vec2::new(0.0, 0.0), Vec2::new(100.0, 100.0));
         commands.insert_resource(culling_box);
 
         // Initialize debug state resource

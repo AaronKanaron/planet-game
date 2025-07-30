@@ -3,7 +3,8 @@ use crate::planet::{
     meshing::render_voxels::VOXEL_SIZE,
     world::{chunk::CHUNK_SIZE, chunk_world::World},
 };
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::HashMap};
+use std::sync::{Arc, Mutex};
 
 /* Structs */
 #[derive(Debug, Clone)]
@@ -381,7 +382,6 @@ impl DualContouring {
     }
 
     /// Solve Quadratic Error Function to find optimal vertex placement
-    /// Enhanced version with better constraint handling and smoothing
     fn solve_qef(
         intersections: &[EdgeIntersection],
         _cell_x: usize,
