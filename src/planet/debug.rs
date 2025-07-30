@@ -473,13 +473,15 @@ impl DebugPlugin {
 
                 //draw the border intersections
                 for intersection in &border_intersections {
+                    let marker_size = VOXEL_SIZE * 0.3;
+                    let cross_size = VOXEL_SIZE * 0.25;
+
                     gizmos.circle_2d(
                         intersection.world_position,
-                        VOXEL_SIZE * 0.2,
+                        marker_size,
                         Color::srgb(1.0, 0.0, 1.0),
                     );
 
-                    let cross_size = VOXEL_SIZE * 0.15;
                     gizmos.line_2d(
                         intersection.world_position - Vec2::new(cross_size, 0.0),
                         intersection.world_position + Vec2::new(cross_size, 0.0),
@@ -489,6 +491,12 @@ impl DebugPlugin {
                         intersection.world_position - Vec2::new(0.0, cross_size),
                         intersection.world_position + Vec2::new(0.0, cross_size),
                         Color::srgb(1.0, 0.0, 1.0),
+                    );
+
+                    gizmos.circle_2d(
+                        intersection.world_position,
+                        marker_size + 2.0,
+                        Color::srgb(1.0, 1.0, 1.0),
                     );
                 }
             }

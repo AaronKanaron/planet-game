@@ -385,10 +385,7 @@ impl DualContouring {
             _ => unreachable!(),
         };
 
-        let world_pos = Vec2::new(
-            (cell_x as f32 + local_pos.x) as f32,
-            (cell_y as f32 + local_pos.y) as f32,
-        );
+        let world_pos = Vec2::new(cell_x as f32 + local_pos.x, cell_y as f32 + local_pos.y);
 
         let normal = Self::calculate_sdf_gradient(world, chunk_x, chunk_y, world_pos);
 
@@ -543,11 +540,14 @@ impl DualContouring {
                         *corner2_idx,
                     );
 
+                    let chunk_world_x = chunk_x as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
+                    let chunk_world_y = chunk_y as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
+                    let cell_world_x = chunk_world_x + cell_x as f32 * VOXEL_SIZE;
+                    let cell_world_y = chunk_world_y + cell_y as f32 * VOXEL_SIZE;
+
                     let world_pos = Vec2::new(
-                        (chunk_x * CHUNK_SIZE as i32) as f32
-                            + (cell_x as f32 + intersection.position.x) * VOXEL_SIZE,
-                        (chunk_y * CHUNK_SIZE as i32) as f32
-                            + (cell_y as f32 + intersection.position.y) * VOXEL_SIZE,
+                        cell_world_x + intersection.position.x * VOXEL_SIZE,
+                        cell_world_y + intersection.position.y * VOXEL_SIZE,
                     );
 
                     let snapped_coord = SnappedCoord::from_world_pos(world_pos);
