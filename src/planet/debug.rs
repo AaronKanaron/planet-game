@@ -473,7 +473,7 @@ impl DebugPlugin {
 
                 // Draw all vertices in the shared vertex registry
                 // This includes both corner vertices and border intersections
-                for (snapped_coord, vertex) in temp_registry.get_all_vertices() {
+                for (snapped_coord, _) in temp_registry.get_all_vertices() {
                     let world_pos = Vec2::new(
                         snapped_coord.x as f32 / 1000.0,
                         snapped_coord.y as f32 / 1000.0,

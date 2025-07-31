@@ -658,8 +658,9 @@ impl DualContouring {
         let fy = world_y - voxel_y as f32;
 
         // Smooth interpolation factors
-        let smooth_fx = fx * fx * (3.0 - 2.0 * fx);
-        let smooth_fy = fy * fy * (3.0 - 2.0 * fy);
+        // * * Used for the fallback bilinear sampling
+        // let smooth_fx = fx * fx * (3.0 - 2.0 * fx);
+        // let smooth_fy = fy * fy * (3.0 - 2.0 * fy);
 
         // Weighted sampling for smoother results
         let mut weighted_sum = 0.0;
@@ -688,40 +689,42 @@ impl DualContouring {
         if total_weight > 0.001 {
             weighted_sum / total_weight
         } else {
-            // Fallback to bilinear interpolation
-            Self::bilinear_sdf_sample(
-                world, chunk_x, chunk_y, voxel_x, voxel_y, smooth_fx, smooth_fy,
-            )
+            error!("Failed to sample SDF: total_weight is too low");
+            // Self::bilinear_sdf_sample(
+            //     world, chunk_x, chunk_y, voxel_x, voxel_y, smooth_fx, smooth_fy,
+            // )
+            0.0
         }
     }
 
+    //? Unsure if this fallback is ever called. Keep if error comes up in future.
     /// Fallback bilinear SDF sampling
-    fn bilinear_sdf_sample(
-        world: &World,
-        chunk_x: i32,
-        chunk_y: i32,
-        voxel_x: i32,
-        voxel_y: i32,
-        fx: f32,
-        fy: f32,
-    ) -> f32 {
-        let v00 = Self::try_get_voxel(world, chunk_x, chunk_y, voxel_x, voxel_y)
-            .map(|solid| if solid { -1.0 } else { 1.0 })
-            .unwrap_or(0.0);
-        let v10 = Self::try_get_voxel(world, chunk_x, chunk_y, voxel_x + 1, voxel_y)
-            .map(|solid| if solid { -1.0 } else { 1.0 })
-            .unwrap_or(0.0);
-        let v01 = Self::try_get_voxel(world, chunk_x, chunk_y, voxel_x, voxel_y + 1)
-            .map(|solid| if solid { -1.0 } else { 1.0 })
-            .unwrap_or(0.0);
-        let v11 = Self::try_get_voxel(world, chunk_x, chunk_y, voxel_x + 1, voxel_y + 1)
-            .map(|solid| if solid { -1.0 } else { 1.0 })
-            .unwrap_or(0.0);
+    // fn bilinear_sdf_sample(
+    //     world: &World,
+    //     chunk_x: i32,
+    //     chunk_y: i32,
+    //     voxel_x: i32,
+    //     voxel_y: i32,
+    //     fx: f32,
+    //     fy: f32,
+    // ) -> f32 {
+    //     let v00 = Self::try_get_voxel(world, chunk_x, chunk_y, voxel_x, voxel_y)
+    //         .map(|solid| if solid { -1.0 } else { 1.0 })
+    //         .unwrap_or(0.0);
+    //     let v10 = Self::try_get_voxel(world, chunk_x, chunk_y, voxel_x + 1, voxel_y)
+    //         .map(|solid| if solid { -1.0 } else { 1.0 })
+    //         .unwrap_or(0.0);
+    //     let v01 = Self::try_get_voxel(world, chunk_x, chunk_y, voxel_x, voxel_y + 1)
+    //         .map(|solid| if solid { -1.0 } else { 1.0 })
+    //         .unwrap_or(0.0);
+    //     let v11 = Self::try_get_voxel(world, chunk_x, chunk_y, voxel_x + 1, voxel_y + 1)
+    //         .map(|solid| if solid { -1.0 } else { 1.0 })
+    //         .unwrap_or(0.0);
 
-        let v0 = v00 * (1.0 - fx) + v10 * fx;
-        let v1 = v01 * (1.0 - fx) + v11 * fx;
-        v0 * (1.0 - fy) + v1 * fy
-    }
+    //     let v0 = v00 * (1.0 - fx) + v10 * fx;
+    //     let v1 = v01 * (1.0 - fx) + v11 * fx;
+    //     v0 * (1.0 - fy) + v1 * fy
+    // }
 
     // =============================================================================
     // BORDER INTERSECTION HANDLING
