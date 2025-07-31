@@ -5,7 +5,6 @@ use crate::planet::{
     meshing::{
         dual_contouring::{ContourCell, DualContouring, SharedVertexRegistry},
         mesh_renderer::ChunkMesh,
-        render_voxels::{VOXEL_SIZE, VoxelRenderer},
     },
     rendering::{
         culling::ChunkCullingBox,
@@ -14,7 +13,7 @@ use crate::planet::{
     world::{
         chunk::{CHUNK_SIZE, Chunk},
         chunk_world::World,
-        voxel::VoxelType,
+        voxel::VOXEL_SIZE,
     },
 };
 
@@ -43,8 +42,8 @@ impl Plugin for DebugPlugin {
                 Self::update_info,
                 Self::input_system,
                 Self::render_contour_gizmos_system,
-                Self::render_voxels_system,
-                Self::cleanup_unloaded_chunks,
+                // Self::render_voxels_system,
+                // Self::cleanup_unloaded_chunks,
             ),
         );
     }
@@ -524,74 +523,74 @@ impl DebugPlugin {
         }
     }
 
-    pub fn render_voxels_system(
-        mut commands: Commands,
-        mut world: ResMut<World>,
-        debug_state: Res<DebugState>,
-        mut meshes: ResMut<Assets<Mesh>>,
-        mut rock_materials: ResMut<Assets<RockMaterial>>,
-        mut dirt_materials: ResMut<Assets<DirtMaterial>>,
-        mut grass_materials: ResMut<Assets<GrassMaterial>>,
-        mut core_materials: ResMut<Assets<CoreMaterial>>,
-        existing_chunks: Query<(Entity, &ChunkMesh)>,
-    ) {
-        if !debug_state.show_voxels {
-            for (entity, _) in existing_chunks.iter() {
-                commands.entity(entity).despawn();
-            }
-            return;
-        }
+    // pub fn render_voxels_system(
+    //     mut commands: Commands,
+    //     mut world: ResMut<World>,
+    //     debug_state: Res<DebugState>,
+    //     mut meshes: ResMut<Assets<Mesh>>,
+    //     mut rock_materials: ResMut<Assets<RockMaterial>>,
+    //     mut dirt_materials: ResMut<Assets<DirtMaterial>>,
+    //     mut grass_materials: ResMut<Assets<GrassMaterial>>,
+    //     mut core_materials: ResMut<Assets<CoreMaterial>>,
+    //     existing_chunks: Query<(Entity, &ChunkMesh)>,
+    // ) {
+    //     if !debug_state.show_voxels {
+    //         for (entity, _) in existing_chunks.iter() {
+    //             commands.entity(entity).despawn();
+    //         }
+    //         return;
+    //     }
 
-        let dirty_chunks = world.get_dirty_chunks();
-        if dirty_chunks.is_empty() {
-            return;
-        }
+    //     let dirty_chunks = world.get_dirty_chunks();
+    //     if dirty_chunks.is_empty() {
+    //         return;
+    //     }
 
-        for (entity, chunk_mesh) in existing_chunks.iter() {
-            if dirty_chunks.contains(&(chunk_mesh.chunk_x, chunk_mesh.chunk_y)) {
-                commands.entity(entity).despawn();
-            }
-        }
+    //     for (entity, chunk_mesh) in existing_chunks.iter() {
+    //         if dirty_chunks.contains(&(chunk_mesh.chunk_x, chunk_mesh.chunk_y)) {
+    //             commands.entity(entity).despawn();
+    //         }
+    //     }
 
-        for &(chunk_x, chunk_y) in &dirty_chunks {
-            if !world.is_chunk_loaded(chunk_x, chunk_y) {
-                continue;
-            }
+    //     for &(chunk_x, chunk_y) in &dirty_chunks {
+    //         if !world.is_chunk_loaded(chunk_x, chunk_y) {
+    //             continue;
+    //         }
 
-            let chunk = world.loaded_chunks.get(&(chunk_x, chunk_y)).unwrap();
+    //         let chunk = world.loaded_chunks.get(&(chunk_x, chunk_y)).unwrap();
 
-            // Create separate meshes for each material type
-            for &material_type in &[
-                VoxelType::Rock,
-                VoxelType::Dirt,
-                VoxelType::Grass,
-                VoxelType::Core,
-            ] {
-                // Delegate to the voxel renderer
-                VoxelRenderer::render_voxels(
-                    chunk,
-                    chunk_x,
-                    chunk_y,
-                    material_type,
-                    &mut commands,
-                    &mut meshes,
-                    &mut rock_materials,
-                    &mut dirt_materials,
-                    &mut grass_materials,
-                    &mut core_materials,
-                );
-            }
-            // Remove dirty flag
-            world.mark_chunk_clean(chunk_x, chunk_y);
-        }
-    }
+    //         // Create separate meshes for each material type
+    //         for &material_type in &[
+    //             VoxelType::Rock,
+    //             VoxelType::Dirt,
+    //             VoxelType::Grass,
+    //             VoxelType::Core,
+    //         ] {
+    //             // Delegate to the voxel renderer
+    //             VoxelRenderer::render_voxels(
+    //                 chunk,
+    //                 chunk_x,
+    //                 chunk_y,
+    //                 material_type,
+    //                 &mut commands,
+    //                 &mut meshes,
+    //                 &mut rock_materials,
+    //                 &mut dirt_materials,
+    //                 &mut grass_materials,
+    //                 &mut core_materials,
+    //             );
+    //         }
+    //         // Remove dirty flag
+    //         world.mark_chunk_clean(chunk_x, chunk_y);
+    //     }
+    // }
 
-    /// System to cleanup unloaded chunks
-    pub fn cleanup_unloaded_chunks(
-        commands: Commands,
-        world: Res<World>,
-        existing_chunks: Query<(Entity, &ChunkMesh)>,
-    ) {
-        VoxelRenderer::cleanup_unloaded_chunks(commands, world, existing_chunks);
-    }
+    // /// System to cleanup unloaded chunks
+    // pub fn cleanup_unloaded_chunks(
+    //     commands: Commands,
+    //     world: Res<World>,
+    //     existing_chunks: Query<(Entity, &ChunkMesh)>,
+    // ) {
+    //     VoxelRenderer::cleanup_unloaded_chunks(commands, world, existing_chunks);
+    // }
 }

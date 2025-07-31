@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 
 use crate::planet::{
-    meshing::{dual_contouring::DualContouring, render_voxels::VOXEL_SIZE},
-    world::{chunk::CHUNK_SIZE, chunk_world::World},
+    meshing::dual_contouring::DualContouring,
+    world::{chunk::CHUNK_SIZE, chunk_world::World, voxel::VOXEL_SIZE},
 };
 
 /// This component should only exist once or not at all, and is

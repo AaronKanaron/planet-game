@@ -15,7 +15,6 @@ use crate::planet::{
 };
 
 /// Voxel size in world units
-pub const VOXEL_SIZE: f32 = 6.0;
 
 pub struct VoxelRenderer;
 

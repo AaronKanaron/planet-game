@@ -10,7 +10,7 @@ use bevy::window::WindowPlugin;
 use crate::planet::plugin::PlanetPlugin;
 use crate::planet::rendering::culling::ChunkCullingBox;
 use crate::planet::world::chunk_world::World;
-use crate::planet::{meshing::render_voxels::VOXEL_SIZE, world::voxel::VoxelType};
+use crate::planet::world::voxel::{VOXEL_SIZE, VoxelType};
 use crate::tiles::TilePlugin;
 use crate::tiles::data::GenericTileData;
 use crate::tiles::preview::TilePreview;

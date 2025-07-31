@@ -3,7 +3,9 @@ use bevy::prelude::*;
 #[derive(Component)]
 pub struct Voxel;
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+pub const VOXEL_SIZE: f32 = 6.0;
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum VoxelType {
     Air,
     Rock,
