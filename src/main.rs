@@ -1,16 +1,20 @@
 mod camera;
 mod planet;
+mod tiles;
 mod utils;
 
-use bevy::input::ButtonInput;
+use bevy::input::{ButtonInput, mouse::MouseWheel};
 use bevy::prelude::*;
 use bevy::window::WindowPlugin;
 
-use crate::camera::CameraPlugin;
 use crate::planet::plugin::PlanetPlugin;
 use crate::planet::rendering::culling::ChunkCullingBox;
 use crate::planet::world::chunk_world::World;
 use crate::planet::{meshing::render_voxels::VOXEL_SIZE, world::voxel::VoxelType};
+use crate::tiles::TilePlugin;
+use crate::tiles::data::GenericTileData;
+use crate::tiles::preview::TilePreview;
+use crate::tiles::variants::loudspeaker::Loudspeaker;
 use crate::utils::debug::plugin::DebugPlugin;
 
 fn main() {
@@ -27,11 +31,18 @@ fn main() {
                 })
                 .set(ImagePlugin::default_nearest()),
         )
-        .add_plugins(DebugPlugin)
-        .add_plugins(PlanetPlugin)
+        .add_plugins((DebugPlugin, PlanetPlugin, TilePlugin))
         // .add_plugins(CameraPlugin)
         .add_systems(Startup, setup)
-        .add_systems(Update, (handle_input, follow_culling_center, handle_zoom))
+        .add_systems(
+            Update,
+            (
+                handle_input,
+                follow_culling_center,
+                handle_zoom,
+                debug_keypress,
+            ),
+        )
         .run();
 }
 
@@ -45,6 +56,21 @@ fn setup(mut commands: Commands) {
         Transform::default(),
         GlobalTransform::default(),
     ));
+}
+
+fn debug_keypress(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    preview: Query<Entity, With<TilePreview>>,
+    mut commands: Commands,
+) {
+    if keyboard_input.just_pressed(KeyCode::KeyK) {
+        commands.spawn(Loudspeaker::new(GenericTileData::new(0, true)));
+    }
+    if keyboard_input.just_pressed(KeyCode::KeyL) {
+        if let Ok(preview) = preview.single() {
+            commands.entity(preview).remove::<TilePreview>();
+        }
+    }
 }
 
 fn handle_input(
@@ -98,22 +124,24 @@ fn follow_culling_center(
 }
 
 fn handle_zoom(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut scroll_events: EventReader<MouseWheel>,
     mut projection: Single<&mut Projection, With<Camera>>,
 ) {
     let Projection::Orthographic(projection) = &mut **projection else {
         return;
     };
 
-    let zoom_factor = 1.2;
-    let min_scale = 0.1;
-    let max_scale = 70.0;
+    let zoom_factor = 1.1;
+    let min_scale = 0.02;
+    let max_scale = 100.0;
 
-    if keyboard_input.just_pressed(KeyCode::KeyI) {
-        // Zoom in: decrease scale
-        projection.scale = (projection.scale / zoom_factor).max(min_scale);
-    } else if keyboard_input.just_pressed(KeyCode::KeyO) {
-        // Zoom out: increase scale
-        projection.scale = (projection.scale * zoom_factor).min(max_scale);
+    for event in scroll_events.read() {
+        if event.y > 0.0 {
+            // Scroll up: zoom in (decrease scale)
+            projection.scale = (projection.scale / zoom_factor).max(min_scale);
+        } else if event.y < 0.0 {
+            // Scroll down: zoom out (increase scale)
+            projection.scale = (projection.scale * zoom_factor).min(max_scale);
+        }
     }
 }

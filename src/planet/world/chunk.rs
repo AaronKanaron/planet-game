@@ -1,4 +1,4 @@
-use crate::planet::world::voxel::VoxelType;
+use crate::planet::{meshing::dual_contouring::ContourCell, world::voxel::VoxelType};
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
 
@@ -13,6 +13,15 @@ pub struct Chunk {
 
     /// Whether this chunk has been modified apart from the initial generation
     modified: bool,
+
+    /// Cached contour cells for performance optimization
+    cached_contour_cells: Option<Vec<ContourCell>>,
+
+    /// Cached preview surface points (world position + normal) for fast preview snapping
+    cached_preview_points: Option<Vec<(Vec2, Vec2)>>,
+
+    /// Whether the contour cell cache is dirty and needs regeneration
+    contour_cache_dirty: bool,
 }
 
 impl Chunk {
@@ -77,6 +86,9 @@ impl Chunk {
             voxels,
             dirty: true,
             modified: false,
+            cached_contour_cells: None,
+            cached_preview_points: None,
+            contour_cache_dirty: true,
         }
     }
 
@@ -270,6 +282,9 @@ impl Chunk {
             if is_changed {
                 self.dirty = true;
                 self.modified = true;
+                self.contour_cache_dirty = true;
+                self.cached_contour_cells = None;
+                self.cached_preview_points = None;
             }
         }
     }
@@ -295,5 +310,42 @@ impl Chunk {
 
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
+        self.contour_cache_dirty = true;
+        self.cached_contour_cells = None;
+        self.cached_preview_points = None;
+    }
+
+    /// Get cached contour cells or return None if cache is dirty
+    pub fn get_cached_contour_cells(&self) -> Option<&Vec<ContourCell>> {
+        if self.contour_cache_dirty {
+            None
+        } else {
+            self.cached_contour_cells.as_ref()
+        }
+    }
+
+    /// Set cached contour cells and mark cache as clean
+    pub fn set_cached_contour_cells(&mut self, contour_cells: Vec<ContourCell>) {
+        self.cached_contour_cells = Some(contour_cells);
+        self.contour_cache_dirty = false;
+    }
+
+    /// Get cached preview points for fast preview snapping
+    pub fn get_cached_preview_points(&self) -> Option<&Vec<(Vec2, Vec2)>> {
+        if self.contour_cache_dirty {
+            None
+        } else {
+            self.cached_preview_points.as_ref()
+        }
+    }
+
+    /// Set cached preview points
+    pub fn set_cached_preview_points(&mut self, preview_points: Vec<(Vec2, Vec2)>) {
+        self.cached_preview_points = Some(preview_points);
+    }
+
+    /// Check if contour cache needs regeneration
+    pub fn is_contour_cache_dirty(&self) -> bool {
+        self.contour_cache_dirty
     }
 }
