@@ -1,9 +1,5 @@
+use crate::planet::world::chunk_world::World;
 use bevy::prelude::*;
-
-use crate::planet::{
-    meshing::{dual_contouring::DualContouring, render_voxels::VOXEL_SIZE},
-    world::{chunk::CHUNK_SIZE, chunk_world::World},
-};
 
 /// This component should only exist once or not at all, and is
 /// attached to the tile which is currently being previewed for
@@ -56,7 +52,7 @@ impl TilePreview {
             let cursor_pos = follower.raw_cursor_position;
 
             if let Some((closest_normal, closest_position)) =
-                Self::find_closest_normal(&mut world, cursor_pos, f32::INFINITY)
+                world.find_closest_normal(cursor_pos, f32::INFINITY)
             {
                 follower.current_normal = closest_normal;
                 follower.target_position = closest_position;
@@ -64,75 +60,6 @@ impl TilePreview {
                 // If no normal found, just use the raw cursor position
                 follower.target_position = cursor_pos;
             }
-        }
-    }
-
-    fn find_closest_normal(
-        world: &mut World,
-        cursor_pos: Vec2,
-        max_distance: f32,
-    ) -> Option<(Vec2, Vec2)> {
-        let mut closest_distance = f32::INFINITY;
-        let mut closest_normal = None;
-        let mut closest_position = None;
-
-        // Calculate which chunks to check based on cursor position and max distance
-        let chunk_size_world = CHUNK_SIZE as f32 * VOXEL_SIZE;
-        let (min_chunk_x, max_chunk_x, min_chunk_y, max_chunk_y) = if max_distance.is_infinite() {
-            // If infinite distance, check all loaded chunks
-            let mut min_x = i32::MAX;
-            let mut max_x = i32::MIN;
-            let mut min_y = i32::MAX;
-            let mut max_y = i32::MIN;
-
-            for &(chunk_x, chunk_y) in world.loaded_chunks.keys() {
-                min_x = min_x.min(chunk_x);
-                max_x = max_x.max(chunk_x);
-                min_y = min_y.min(chunk_y);
-                max_y = max_y.max(chunk_y);
-            }
-
-            if min_x == i32::MAX {
-                // No loaded chunks
-                return None;
-            }
-
-            (min_x, max_x, min_y, max_y)
-        } else {
-            (
-                ((cursor_pos.x - max_distance) / chunk_size_world).floor() as i32,
-                ((cursor_pos.x + max_distance) / chunk_size_world).ceil() as i32,
-                ((cursor_pos.y - max_distance) / chunk_size_world).floor() as i32,
-                ((cursor_pos.y + max_distance) / chunk_size_world).ceil() as i32,
-            )
-        };
-
-        // Check all nearby chunks for preview points
-        for chunk_x in min_chunk_x..=max_chunk_x {
-            for chunk_y in min_chunk_y..=max_chunk_y {
-                if world.loaded_chunks.contains_key(&(chunk_x, chunk_y)) {
-                    let preview_points =
-                        DualContouring::get_cached_preview_points(world, chunk_x, chunk_y);
-
-                    for (world_pos, normal) in preview_points {
-                        let distance = cursor_pos.distance(world_pos);
-
-                        if distance < closest_distance
-                            && (max_distance.is_infinite() || distance <= max_distance)
-                        {
-                            closest_distance = distance;
-                            closest_normal = Some(normal);
-                            closest_position = Some(world_pos);
-                        }
-                    }
-                }
-            }
-        }
-
-        if let (Some(normal), Some(position)) = (closest_normal, closest_position) {
-            Some((normal, position))
-        } else {
-            None
         }
     }
 

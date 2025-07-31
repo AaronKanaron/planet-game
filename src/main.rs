@@ -1,4 +1,5 @@
 mod camera;
+mod foliage;
 mod planet;
 mod tiles;
 mod utils;
@@ -7,6 +8,7 @@ use bevy::input::{ButtonInput, mouse::MouseWheel};
 use bevy::prelude::*;
 use bevy::window::WindowPlugin;
 
+use crate::foliage::plugin::FoliagePlugin;
 use crate::planet::plugin::PlanetPlugin;
 use crate::planet::rendering::culling::ChunkCullingBox;
 use crate::planet::world::chunk_world::World;
@@ -31,7 +33,7 @@ fn main() {
                 })
                 .set(ImagePlugin::default_nearest()),
         )
-        .add_plugins((DebugPlugin, PlanetPlugin, TilePlugin))
+        .add_plugins((DebugPlugin, PlanetPlugin, TilePlugin, FoliagePlugin))
         // .add_plugins(CameraPlugin)
         .add_systems(Startup, setup)
         .add_systems(

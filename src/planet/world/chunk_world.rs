@@ -1,5 +1,8 @@
 use crate::planet::{
-    meshing::dual_contouring::SharedVertexRegistry,
+    meshing::{
+        dual_contouring::{DualContouring, SharedVertexRegistry},
+        render_voxels::VOXEL_SIZE,
+    },
     rendering::culling::ChunkCullingBox,
     world::{
         chunk::{CHUNK_SIZE, Chunk},
@@ -205,5 +208,76 @@ impl World {
     /// Get the number of loaded chunks
     pub fn loaded_chunk_count(&self) -> usize {
         self.loaded_chunks.len()
+    }
+
+    /// Finds the closest normal to `position`, useful for snapping items
+    /// to planet surface.
+    pub fn find_closest_normal(
+        &mut self,
+        position: Vec2,
+        max_distance: f32,
+    ) -> Option<(Vec2, Vec2)> {
+        let mut closest_distance = f32::INFINITY;
+        let mut closest_normal = None;
+        let mut closest_position = None;
+
+        // Calculate which chunks to check based on cursor position and max distance
+        let chunk_size_world = CHUNK_SIZE as f32 * VOXEL_SIZE;
+        let (min_chunk_x, max_chunk_x, min_chunk_y, max_chunk_y) = if max_distance.is_infinite() {
+            // If infinite distance, check all loaded chunks
+            let mut min_x = i32::MAX;
+            let mut max_x = i32::MIN;
+            let mut min_y = i32::MAX;
+            let mut max_y = i32::MIN;
+
+            for &(chunk_x, chunk_y) in self.loaded_chunks.keys() {
+                min_x = min_x.min(chunk_x);
+                max_x = max_x.max(chunk_x);
+                min_y = min_y.min(chunk_y);
+                max_y = max_y.max(chunk_y);
+            }
+
+            if min_x == i32::MAX {
+                // No loaded chunks
+                return None;
+            }
+
+            (min_x, max_x, min_y, max_y)
+        } else {
+            (
+                ((position.x - max_distance) / chunk_size_world).floor() as i32,
+                ((position.x + max_distance) / chunk_size_world).ceil() as i32,
+                ((position.y - max_distance) / chunk_size_world).floor() as i32,
+                ((position.y + max_distance) / chunk_size_world).ceil() as i32,
+            )
+        };
+
+        // Check all nearby chunks for preview points
+        for chunk_x in min_chunk_x..=max_chunk_x {
+            for chunk_y in min_chunk_y..=max_chunk_y {
+                if self.loaded_chunks.contains_key(&(chunk_x, chunk_y)) {
+                    let preview_points =
+                        DualContouring::get_cached_preview_points(self, chunk_x, chunk_y);
+
+                    for (world_pos, normal) in preview_points {
+                        let distance = position.distance(world_pos);
+
+                        if distance < closest_distance
+                            && (max_distance.is_infinite() || distance <= max_distance)
+                        {
+                            closest_distance = distance;
+                            closest_normal = Some(normal);
+                            closest_position = Some(world_pos);
+                        }
+                    }
+                }
+            }
+        }
+
+        if let (Some(normal), Some(position)) = (closest_normal, closest_position) {
+            Some((normal, position))
+        } else {
+            None
+        }
     }
 }
