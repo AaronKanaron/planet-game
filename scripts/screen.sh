@@ -8,8 +8,8 @@ done
 
 echo "Taking screenshot!"
 
-# Create timestamp in dd-mm-yyyy-hh:mm format
-timestamp=$(date "+%d-%m-%Y-%H:%M")
+# Create timestamp in dd-mm-yyyy-hh_mm format
+timestamp=$(date "+%d-%m-%Y-%H_%M")
 
 # Take screenshot and save to scripts/images directory
 screencapture "scripts/images/$timestamp.png"
