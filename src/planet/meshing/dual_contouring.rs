@@ -125,6 +125,47 @@ impl DualContouring {
         (contour_cells, border_intersections)
     }
 
+    /// Get cached preview points for fast tile preview snapping
+    /// This is arturs, should this be standard?
+    pub fn get_cached_preview_points(
+        world: &mut World,
+        chunk_x: i32,
+        chunk_y: i32,
+    ) -> Vec<(Vec2, Vec2)> {
+        if let Some(chunk) = world.loaded_chunks.get(&(chunk_x, chunk_y)) {
+            // Try to use cached preview points first
+            if let Some(cached_points) = chunk.get_cached_preview_points() {
+                return cached_points.clone();
+            }
+        }
+
+        // Calculate preview points from contour cells if cache is dirty
+        let contour_cells = Self::find_contour_cells_cached(world, chunk_x, chunk_y);
+        let chunk_size_world = CHUNK_SIZE as f32 * VOXEL_SIZE;
+
+        let mut preview_points = Vec::new();
+        for cell in &contour_cells {
+            // Calculate world position of the interior vertex
+            let chunk_world_x = chunk_x as f32 * chunk_size_world;
+            let chunk_world_y = chunk_y as f32 * chunk_size_world;
+            let cell_world_x = chunk_world_x + cell.x as f32 * VOXEL_SIZE;
+            let cell_world_y = chunk_world_y + cell.y as f32 * VOXEL_SIZE;
+            let world_pos = Vec2::new(
+                cell_world_x + cell.interior_vertex.x * VOXEL_SIZE,
+                cell_world_y + cell.interior_vertex.y * VOXEL_SIZE,
+            );
+
+            preview_points.push((world_pos, cell.normal));
+        }
+
+        // Cache the preview points
+        if let Some(chunk) = world.loaded_chunks.get_mut(&(chunk_x, chunk_y)) {
+            chunk.set_cached_preview_points(preview_points.clone());
+        }
+
+        preview_points
+    }
+
     /// Find contour cells without border intersection detection (simpler version)
     ///
     /// Use this when you don't need cross-chunk vertex sharing. This is faster
@@ -246,6 +287,30 @@ impl DualContouring {
         }
     }
 
+    /// Find contour cells with caching support for performance optimization
+    /// This is Arturs, should this be standard?
+    pub fn find_contour_cells_cached(
+        world: &mut World,
+        chunk_x: i32,
+        chunk_y: i32,
+    ) -> Vec<ContourCell> {
+        if let Some(chunk) = world.loaded_chunks.get(&(chunk_x, chunk_y)) {
+            // Try to use cached contour cells first
+            if let Some(cached_cells) = chunk.get_cached_contour_cells() {
+                return cached_cells.clone();
+            }
+        }
+
+        // Calculate contour cells if cache is dirty or doesn't exist
+        let contour_cells = Self::find_contour_cells(world, chunk_x, chunk_y);
+
+        // Cache the result
+        if let Some(chunk) = world.loaded_chunks.get_mut(&(chunk_x, chunk_y)) {
+            chunk.set_cached_contour_cells(contour_cells.clone());
+        }
+
+        contour_cells
+    }
     // =============================================================================
     // VOXEL SAMPLING
     // =============================================================================
