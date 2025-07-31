@@ -81,6 +81,11 @@ impl SharedVertexRegistry {
             vertex_id
         }
     }
+
+    /// Get all registered vertices for debugging purposes
+    pub fn get_all_vertices(&self) -> impl Iterator<Item = (&SnappedCoord, &ChunkBorderVertex)> {
+        self.vertices.iter()
+    }
 }
 
 /// Information about an intersection on a chunk border
@@ -185,6 +190,19 @@ impl DualContouring {
         registry.next_vertex_id = 0;
     }
 
+    /// Process corner vertices for a chunk - public API for manual corner processing
+    ///
+    /// This can be called separately if you need to handle corner vertices
+    /// without generating the full contour cells.
+    pub fn process_chunk_corner_vertices(
+        world: &World,
+        chunk_x: i32,
+        chunk_y: i32,
+        vertex_registry: &mut SharedVertexRegistry,
+    ) {
+        Self::process_corner_vertices(world, chunk_x, chunk_y, vertex_registry);
+    }
+
     // =============================================================================
     // CORE PROCESSING
     // =============================================================================
@@ -235,6 +253,11 @@ impl DualContouring {
             }
 
             std::mem::swap(&mut prev_row, &mut curr_row);
+        }
+
+        // Handle corner vertices if vertex registry is provided
+        if let Some(ref mut registry) = vertex_registry {
+            Self::process_corner_vertices(world, chunk_x, chunk_y, registry);
         }
 
         (contour_cells, border_intersections)
@@ -703,6 +726,45 @@ impl DualContouring {
     // =============================================================================
     // BORDER INTERSECTION HANDLING
     // =============================================================================
+
+    /// Process corner vertices for a chunk - adds vertices at chunk corners when inside solid material
+    /// This ensures proper meshing at chunk boundaries where corners are solid
+    fn process_corner_vertices(
+        world: &World,
+        chunk_x: i32,
+        chunk_y: i32,
+        vertex_registry: &mut SharedVertexRegistry,
+    ) {
+        // Define the 4 corner positions in local chunk coordinates
+        let corner_positions = [
+            (0, 0),                                 // Bottom-left
+            (CHUNK_SIZE as i32, 0),                 // Bottom-right
+            (0, CHUNK_SIZE as i32),                 // Top-left
+            (CHUNK_SIZE as i32, CHUNK_SIZE as i32), // Top-right
+        ];
+
+        for (local_x, local_y) in corner_positions.iter() {
+            // Sample voxel at the exact corner coordinate
+            if let Some(is_solid) = Self::try_get_voxel(world, chunk_x, chunk_y, *local_x, *local_y)
+            {
+                // If corner is inside solid material, register it as a vertex
+                if is_solid {
+                    // Convert local coordinates to world coordinates
+                    let chunk_world_x = chunk_x as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
+                    let chunk_world_y = chunk_y as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
+                    let corner_world_x = chunk_world_x + (*local_x as f32 * VOXEL_SIZE);
+                    let corner_world_y = chunk_world_y + (*local_y as f32 * VOXEL_SIZE);
+
+                    let world_pos = Vec2::new(corner_world_x, corner_world_y);
+                    let snapped_coord = SnappedCoord::from_world_pos(world_pos);
+
+                    // Register the corner vertex in the shared system
+                    // Adjacent chunks will generate the same corner vertex automatically
+                    let _vertex_id = vertex_registry.get_or_create_vertex(snapped_coord);
+                }
+            }
+        }
+    }
 
     /// Find border intersections for the given cell and register them in the shared vertex system
     fn find_border_intersections(
