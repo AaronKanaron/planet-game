@@ -27,7 +27,7 @@ pub struct DebugState {
     pub show_contour_lines: bool,
     pub show_voxels: bool,
     pub show_chunk_borders: bool,
-    pub show_border_intersections: bool,
+    pub show_shared_vertices: bool,
 }
 
 #[derive(Component)]
@@ -59,7 +59,7 @@ impl Default for DebugState {
             show_contour_lines: false,
             show_voxels: true, // Show voxels by default
             show_chunk_borders: false,
-            show_border_intersections: false,
+            show_shared_vertices: false,
         }
     }
 }
@@ -110,7 +110,7 @@ impl DebugPlugin {
             };
 
             **text = format!(
-                "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nChunk Range: ({}, {}) to ({}, {})\n\nDebug Visualization:\nF1 - Contour Cells: {}\nF2 - Normals: {}\nF3 - Interior Vertices: {}\nF4 - Contour Lines: {}\nF5 - Voxels: {}\nF6 - Chunk Borders: {}\nF7 - Border Intersections: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nK/L - Toggle loudspeaker/preview",
+                "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nChunk Range: ({}, {}) to ({}, {})\n\nDebug Visualization:\nF1 - Contour Cells: {}\nF2 - Normals: {}\nF3 - Interior Vertices: {}\nF4 - Contour Lines: {}\nF5 - Voxels: {}\nF6 - Chunk Borders: {}\nF7 - Shared Vertices: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nK/L - Toggle loudspeaker/preview",
                 chunk_world.loaded_chunk_count(),
                 expected_chunks,
                 culling_box.center.x,
@@ -148,7 +148,7 @@ impl DebugPlugin {
                 } else {
                     "OFF"
                 },
-                if debug_state.show_border_intersections {
+                if debug_state.show_shared_vertices {
                     "ON"
                 } else {
                     "OFF"
@@ -209,10 +209,10 @@ impl DebugPlugin {
         }
 
         if keyboard_input.just_pressed(KeyCode::F7) {
-            debug_state.show_border_intersections = !debug_state.show_border_intersections;
+            debug_state.show_shared_vertices = !debug_state.show_shared_vertices;
             info!(
-                "Border intersections: {}",
-                debug_state.show_border_intersections
+                "Shared vertices (corners + intersections): {}",
+                debug_state.show_shared_vertices
             );
         }
     }
@@ -444,18 +444,18 @@ impl DebugPlugin {
             && !debug_state.show_normals
             && !debug_state.show_interior_vertices
             && !debug_state.show_contour_lines
-            && !debug_state.show_border_intersections
+            && !debug_state.show_shared_vertices
         {
             return;
         }
 
-        if debug_state.show_border_intersections {
+        if debug_state.show_shared_vertices {
             let chunk_positions: Vec<(i32, i32)> = world.loaded_chunks.keys().cloned().collect();
 
             for (chunk_x, chunk_y) in chunk_positions {
                 let mut temp_registry = SharedVertexRegistry::new(); // TODO; do not make a temporary registry every time, instead reuse a single instance
 
-                let (contour_cells, border_intersections) =
+                let (contour_cells, _border_intersections) =
                     DualContouring::find_contour_cells_with_borders(
                         &*world,
                         chunk_x,
@@ -471,32 +471,41 @@ impl DebugPlugin {
                     &debug_state,
                 );
 
-                //draw the border intersections
-                for intersection in &border_intersections {
-                    let marker_size = VOXEL_SIZE * 0.3;
-                    let cross_size = VOXEL_SIZE * 0.25;
+                // Draw all vertices in the shared vertex registry
+                // This includes both corner vertices and border intersections
+                for (snapped_coord, vertex) in temp_registry.get_all_vertices() {
+                    let world_pos = Vec2::new(
+                        snapped_coord.x as f32 / 1000.0,
+                        snapped_coord.y as f32 / 1000.0,
+                    );
 
+                    let marker_size = VOXEL_SIZE * 0.4;
+                    let cross_size = VOXEL_SIZE * 0.3;
+
+                    // Draw a larger circle for shared vertices
                     gizmos.circle_2d(
-                        intersection.world_position,
+                        world_pos,
                         marker_size,
+                        Color::srgb(1.0, 0.0, 1.0), // Magenta for shared vertices
+                    );
+
+                    // Draw cross pattern to make them more visible
+                    gizmos.line_2d(
+                        world_pos - Vec2::new(cross_size, 0.0),
+                        world_pos + Vec2::new(cross_size, 0.0),
+                        Color::srgb(1.0, 0.0, 1.0),
+                    );
+                    gizmos.line_2d(
+                        world_pos - Vec2::new(0.0, cross_size),
+                        world_pos + Vec2::new(0.0, cross_size),
                         Color::srgb(1.0, 0.0, 1.0),
                     );
 
-                    gizmos.line_2d(
-                        intersection.world_position - Vec2::new(cross_size, 0.0),
-                        intersection.world_position + Vec2::new(cross_size, 0.0),
-                        Color::srgb(1.0, 0.0, 1.0),
-                    );
-                    gizmos.line_2d(
-                        intersection.world_position - Vec2::new(0.0, cross_size),
-                        intersection.world_position + Vec2::new(0.0, cross_size),
-                        Color::srgb(1.0, 0.0, 1.0),
-                    );
-
+                    // Draw vertex ID as a small circle outline
                     gizmos.circle_2d(
-                        intersection.world_position,
+                        world_pos,
                         marker_size + 2.0,
-                        Color::srgb(1.0, 1.0, 1.0),
+                        Color::srgb(1.0, 1.0, 1.0), // White outline
                     );
                 }
             }
