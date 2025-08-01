@@ -1,12 +1,9 @@
 use crate::planet::{
-    meshing::{
-        dual_contouring::{DualContouring, SharedVertexRegistry},
-        render_voxels::VOXEL_SIZE,
-    },
+    meshing::dual_contouring::{DualContouring, SharedVertexRegistry},
     rendering::culling::ChunkCullingBox,
     world::{
         chunk::{CHUNK_SIZE, Chunk},
-        voxel::VoxelType,
+        voxel::{VOXEL_SIZE, VoxelType},
     },
 };
 use bevy::{platform::collections::HashMap, prelude::*};
@@ -256,10 +253,11 @@ impl World {
         for chunk_x in min_chunk_x..=max_chunk_x {
             for chunk_y in min_chunk_y..=max_chunk_y {
                 if self.loaded_chunks.contains_key(&(chunk_x, chunk_y)) {
-                    let preview_points =
-                        DualContouring::get_cached_preview_points(self, chunk_x, chunk_y);
+                    let Some(chunk) = self.loaded_chunks.get(&(chunk_x, chunk_y)) else {
+                        continue;
+                    };
 
-                    for (world_pos, normal) in preview_points {
+                    for (world_pos, normal) in chunk.surface_normals().to_owned() {
                         let distance = position.distance(world_pos);
 
                         if distance < closest_distance

@@ -10,7 +10,7 @@ use crate::planet::{
     world::{
         chunk::{CHUNK_SIZE, Chunk},
         chunk_world::World,
-        voxel::{Voxel, VoxelType},
+        voxel::{VOXEL_SIZE, Voxel, VoxelType},
     },
 };
 

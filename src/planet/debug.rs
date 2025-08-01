@@ -2,14 +2,8 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::planet::{
-    meshing::{
-        dual_contouring::{ContourCell, DualContouring, SharedVertexRegistry},
-        mesh_renderer::ChunkMesh,
-    },
-    rendering::{
-        culling::ChunkCullingBox,
-        materials::{CoreMaterial, DirtMaterial, GrassMaterial, RockMaterial},
-    },
+    meshing::dual_contouring::{ContourCell, DualContouring, SharedVertexRegistry},
+    rendering::culling::ChunkCullingBox,
     world::{
         chunk::{CHUNK_SIZE, Chunk},
         chunk_world::World,
