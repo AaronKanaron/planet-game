@@ -1,4 +1,4 @@
-use crate::planet::meshing::render_voxels::VOXEL_SIZE;
+use crate::planet::world::voxel::VOXEL_SIZE;
 use bevy::prelude::*;
 
 /// Represents a 2D bounding box for chunk culling

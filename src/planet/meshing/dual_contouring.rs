@@ -1,5 +1,5 @@
 use crate::planet::{
-    meshing::render_voxels::VOXEL_SIZE,
+    world::voxel::VOXEL_SIZE,
     world::{chunk::CHUNK_SIZE, chunk_world::World},
 };
 use bevy::{platform::collections::HashMap, prelude::*};
