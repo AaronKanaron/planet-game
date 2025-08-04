@@ -1,4 +1,7 @@
-use crate::planet::world::voxel::VoxelType;
+use crate::planet::{
+    meshing::dual_contouring::{ContourCell, SharedVertexRegistry},
+    world::{chunk_world::World, voxel::VoxelType},
+};
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
 
@@ -303,5 +306,41 @@ impl Chunk {
     }
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
+    }
+
+    /// Populate surface normals from dual contouring contour cells
+    pub fn populate_surface_normals(
+        &mut self,
+        contour_cells: Vec<ContourCell>,
+        chunk_x: i32,
+        chunk_y: i32,
+    ) {
+        use crate::planet::world::voxel::VOXEL_SIZE;
+
+        self.surface_normals.clear();
+        self.surface_normals.reserve(contour_cells.len());
+
+        let chunk_world_x = chunk_x as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
+        let chunk_world_y = chunk_y as f32 * CHUNK_SIZE as f32 * VOXEL_SIZE;
+
+        for cell in contour_cells {
+            let cell_world_x = chunk_world_x + cell.x as f32 * VOXEL_SIZE;
+            let cell_world_y = chunk_world_y + cell.y as f32 * VOXEL_SIZE;
+
+            let absolute_vertex_pos = Vec2::new(
+                cell_world_x + cell.interior_vertex.x * VOXEL_SIZE,
+                cell_world_y + cell.interior_vertex.y * VOXEL_SIZE,
+            );
+
+            self.surface_normals
+                .push((absolute_vertex_pos, cell.normal));
+        }
+
+        println!(
+            "Populated surface normals for chunk ({}, {}) with {} normals",
+            chunk_x,
+            chunk_y,
+            self.surface_normals.len()
+        );
     }
 }

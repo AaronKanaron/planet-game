@@ -21,6 +21,7 @@ pub struct DebugState {
     pub show_voxels: bool,
     pub show_chunk_borders: bool,
     pub show_shared_vertices: bool,
+    pub show_chunk_normals: bool,
 }
 
 #[derive(Component)]
@@ -53,6 +54,7 @@ impl Default for DebugState {
             show_voxels: true, // Show voxels by default
             show_chunk_borders: false,
             show_shared_vertices: false,
+            show_chunk_normals: false,
         }
     }
 }
@@ -103,7 +105,7 @@ impl DebugPlugin {
             };
 
             **text = format!(
-                "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nChunk Range: ({}, {}) to ({}, {})\n\nDebug Visualization:\nF1 - Contour Cells: {}\nF2 - Normals: {}\nF3 - Interior Vertices: {}\nF4 - Contour Lines: {}\nF5 - Voxels: {}\nF6 - Chunk Borders: {}\nF7 - Shared Vertices: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nK/L - Toggle loudspeaker/preview",
+                "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nChunk Range: ({}, {}) to ({}, {})\n\nDebug Visualization:\nF1 - Contour Cells: {}\nF2 - Normals: {}\nF3 - Interior Vertices: {}\nF4 - Contour Lines: {}\nF5 - Voxels: {}\nF6 - Chunk Borders: {}\nF7 - Shared Vertices: {}\nF8 - Chunk Normals: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nK/L - Toggle loudspeaker/preview",
                 chunk_world.loaded_chunk_count(),
                 expected_chunks,
                 culling_box.center.x,
@@ -142,6 +144,11 @@ impl DebugPlugin {
                     "OFF"
                 },
                 if debug_state.show_shared_vertices {
+                    "ON"
+                } else {
+                    "OFF"
+                },
+                if debug_state.show_chunk_normals {
                     "ON"
                 } else {
                     "OFF"
@@ -207,6 +214,11 @@ impl DebugPlugin {
                 "Shared vertices (corners + intersections): {}",
                 debug_state.show_shared_vertices
             );
+        }
+
+        if keyboard_input.just_pressed(KeyCode::F8) {
+            debug_state.show_chunk_normals = !debug_state.show_chunk_normals;
+            info!("Chunk normals: {}", debug_state.show_chunk_normals);
         }
     }
 
@@ -438,6 +450,7 @@ impl DebugPlugin {
             && !debug_state.show_interior_vertices
             && !debug_state.show_contour_lines
             && !debug_state.show_shared_vertices
+            && !debug_state.show_chunk_normals
         {
             return;
         }
@@ -512,6 +525,41 @@ impl DebugPlugin {
                     chunk_y,
                     &mut gizmos,
                     &debug_state,
+                );
+            }
+        }
+
+        // Render chunk normals if enabled
+        if debug_state.show_chunk_normals {
+            Self::render_chunk_normals(&world.loaded_chunks, &mut gizmos);
+        }
+    }
+
+    /// Render chunk normals stored in chunk structs
+    fn render_chunk_normals(loaded_chunks: &HashMap<(i32, i32), Chunk>, gizmos: &mut Gizmos) {
+        for (&(_chunk_x, _chunk_y), chunk) in loaded_chunks {
+            let normals = chunk.surface_normals();
+
+            for &(position, normal) in normals {
+                let normal_length = VOXEL_SIZE * 1.2; // Make chunk normals slightly longer than contour normals
+                let normal_end = position + normal * normal_length;
+
+                // Use blue color to distinguish from red contour normals
+                gizmos.line_2d(position, normal_end, Color::srgb(0.0, 0.5, 1.0));
+
+                // Add arrowhead for normal direction
+                let arrow_size = VOXEL_SIZE * 0.15;
+                let perpendicular = Vec2::new(-normal.y, normal.x) * arrow_size;
+                let arrow_base = normal_end - normal * arrow_size;
+                gizmos.line_2d(
+                    normal_end,
+                    arrow_base + perpendicular,
+                    Color::srgb(0.0, 0.5, 1.0),
+                );
+                gizmos.line_2d(
+                    normal_end,
+                    arrow_base - perpendicular,
+                    Color::srgb(0.0, 0.5, 1.0),
                 );
             }
         }

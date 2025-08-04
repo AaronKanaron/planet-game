@@ -159,6 +159,23 @@ impl World {
             }
         }
 
+        // The insertion of chunk normals have to be done separatly because it's
+        // dependent on neighboring chunks
+        for chunk in loaded_chunks.iter() {
+            let (chunk_x, chunk_y) = chunk.clone();
+            let (contour_cells, _border_intersections) =
+                DualContouring::find_contour_cells_with_borders(
+                    &*self,
+                    chunk_x,
+                    chunk_y,
+                    &mut SharedVertexRegistry::new(),
+                );
+            self.loaded_chunks
+                .get_mut(&(chunk_x, chunk_y))
+                .unwrap()
+                .populate_surface_normals(contour_cells, chunk_x, chunk_y);
+        }
+
         loaded_chunks
     }
 
