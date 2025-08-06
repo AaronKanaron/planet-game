@@ -2,7 +2,11 @@ use crate::planet::{rendering::culling::ChunkCullingBox, world::chunk_world::Wor
 use bevy::prelude::*;
 
 /// System that handles chunk loading and unloading based on the culling box
-pub fn chunk_culling_system(mut chunk_world: ResMut<World>, culling_box: Res<ChunkCullingBox>) {
+pub fn chunk_culling_system(
+    mut chunk_world: ResMut<World>,
+    mut commands: Commands,
+    culling_box: Res<ChunkCullingBox>,
+) {
     if !culling_box.enabled {
         return;
     }
@@ -13,10 +17,10 @@ pub fn chunk_culling_system(mut chunk_world: ResMut<World>, culling_box: Res<Chu
     }
 
     // Load chunks within the bounding box
-    let loaded_chunks = chunk_world.load_chunks_in_box(&culling_box);
+    let loaded_chunks = chunk_world.load_chunks_in_box(&mut commands, &culling_box);
 
     // Unload chunks outside the bounding box
-    let unloaded_chunks = chunk_world.unload_chunks_outside_box(&culling_box);
+    let unloaded_chunks = chunk_world.unload_chunks_outside_box(&mut commands, &culling_box);
 
     if !unloaded_chunks.is_empty() {
         info!(

@@ -1,6 +1,6 @@
-use crate::planet::{
-    meshing::dual_contouring::{ContourCell, SharedVertexRegistry},
-    world::{chunk_world::World, voxel::VoxelType},
+use crate::{
+    foliage::variants::tree::Tree,
+    planet::{meshing::dual_contouring::ContourCell, world::voxel::VoxelType},
 };
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
@@ -19,6 +19,8 @@ pub struct Chunk {
 
     /// Vec<(A, B)> where A is the position of the normal and B is the actual vector
     surface_normals: Vec<(Vec2, Vec2)>,
+
+    foliage: Vec<Entity>,
 }
 
 impl Chunk {
@@ -84,6 +86,7 @@ impl Chunk {
             dirty: true,
             modified: false,
             surface_normals: Vec::new(),
+            foliage: Vec::new(),
         }
     }
 
@@ -297,6 +300,13 @@ impl Chunk {
         &self.surface_normals
     }
 
+    pub fn foliage(&self) -> &[Entity] {
+        &self.foliage
+    }
+    pub fn clear_foliage(&mut self) {
+        self.foliage.clear();
+    }
+
     /// Returns whether this chunk needs to be re-meshed
     pub fn is_dirty(&self) -> bool {
         self.dirty
@@ -335,12 +345,52 @@ impl Chunk {
             self.surface_normals
                 .push((absolute_vertex_pos, cell.normal));
         }
+    }
 
-        println!(
-            "Populated surface normals for chunk ({}, {}) with {} normals",
-            chunk_x,
-            chunk_y,
-            self.surface_normals.len()
-        );
+    /// Generate foliage for this chunk using a deterministic seed
+    pub fn generate_foliage(
+        &mut self,
+        commands: &mut Commands,
+        chunk_x: i32,
+        chunk_y: i32,
+        world_seed: u64,
+    ) {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        // Create deterministic random number generator for this chunk
+        let mut hasher = DefaultHasher::new();
+        world_seed.hash(&mut hasher);
+        chunk_x.hash(&mut hasher);
+        chunk_y.hash(&mut hasher);
+        let chunk_seed = hasher.finish();
+
+        // Simple LCG for deterministic randomness
+        let mut rng_state = chunk_seed;
+        let mut next_random = || {
+            rng_state = rng_state.wrapping_mul(1103515245).wrapping_add(12345);
+            rng_state
+        };
+
+        // Generate trees based on surface normals
+        for &(pos, normal) in &self.surface_normals {
+            // Use deterministic chance based on position and chunk seed
+            let pos_hash = (pos.x as u64) ^ ((pos.y as u64) << 32);
+            let foliage_chance = ((next_random() ^ pos_hash) as f64) / (u64::MAX as f64);
+
+            if foliage_chance < 0.05 {
+                // 1% chance for foliage
+                let tree = commands
+                    .spawn(Tree {
+                        transform: Transform::from_translation(Vec3::new(
+                            pos.x, pos.y, 0.0, // Assuming flat terrain
+                        ))
+                        .with_rotation(Quat::from_rotation_z(normal.to_angle())),
+                    })
+                    .id();
+
+                self.foliage.push(tree);
+            }
+        }
     }
 }

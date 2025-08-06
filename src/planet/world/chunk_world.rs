@@ -1,10 +1,13 @@
-use crate::planet::{
-    meshing::dual_contouring::{DualContouring, SharedVertexRegistry},
-    rendering::culling::ChunkCullingBox,
-    world::{
-        chunk::{CHUNK_SIZE, Chunk},
-        voxel::{VOXEL_SIZE, VoxelType},
+use crate::{
+    planet::{
+        meshing::dual_contouring::{DualContouring, SharedVertexRegistry},
+        rendering::culling::ChunkCullingBox,
+        world::{
+            chunk::{CHUNK_SIZE, Chunk},
+            voxel::{VOXEL_SIZE, VoxelType},
+        },
     },
+    utils::debug::plugin::DebugRotate,
 };
 use bevy::{platform::collections::HashMap, prelude::*};
 use noise::Perlin;
@@ -16,6 +19,9 @@ pub struct World {
 
     pub noise: Perlin,
 
+    /// World seed for deterministic generation
+    pub seed: u64,
+
     /// Shared vertex registry for border vertices
     pub vertex_registry: SharedVertexRegistry,
 }
@@ -25,6 +31,7 @@ impl World {
         Self {
             loaded_chunks: HashMap::new(),
             noise: Perlin::new(42),
+            seed: rand::random(),
             vertex_registry: SharedVertexRegistry::new(),
         }
     }
@@ -141,7 +148,11 @@ impl World {
     }
 
     /// Load chunks within the given culling box
-    pub fn load_chunks_in_box(&mut self, culling_box: &ChunkCullingBox) -> Vec<(i32, i32)> {
+    pub fn load_chunks_in_box(
+        &mut self,
+        commands: &mut Commands,
+        culling_box: &ChunkCullingBox,
+    ) -> Vec<(i32, i32)> {
         let (min_chunk_x, min_chunk_y, max_chunk_x, max_chunk_y) =
             culling_box.get_chunk_bounds(CHUNK_SIZE);
 
@@ -152,7 +163,7 @@ impl World {
                 if culling_box.contains_chunk(chunk_x, chunk_y, CHUNK_SIZE)
                     && !self.loaded_chunks.contains_key(&(chunk_x, chunk_y))
                 {
-                    let chunk = Chunk::generate(chunk_x, chunk_y, &self.noise);
+                    let mut chunk = Chunk::generate(chunk_x, chunk_y, &self.noise);
                     self.loaded_chunks.insert((chunk_x, chunk_y), chunk);
                     loaded_chunks.push((chunk_x, chunk_y));
                 }
@@ -170,17 +181,20 @@ impl World {
                     chunk_y,
                     &mut SharedVertexRegistry::new(),
                 );
-            self.loaded_chunks
-                .get_mut(&(chunk_x, chunk_y))
-                .unwrap()
-                .populate_surface_normals(contour_cells, chunk_x, chunk_y);
+            let chunk = self.loaded_chunks.get_mut(&(chunk_x, chunk_y)).unwrap();
+            chunk.populate_surface_normals(contour_cells, chunk_x, chunk_y);
+            chunk.generate_foliage(commands, chunk_x, chunk_y, self.seed);
         }
 
         loaded_chunks
     }
 
     /// Unload chunks outside the given culling box
-    pub fn unload_chunks_outside_box(&mut self, culling_box: &ChunkCullingBox) -> Vec<(i32, i32)> {
+    pub fn unload_chunks_outside_box(
+        &mut self,
+        commands: &mut Commands,
+        culling_box: &ChunkCullingBox,
+    ) -> Vec<(i32, i32)> {
         let chunks_to_remove: Vec<(i32, i32)> = self
             .loaded_chunks
             .keys()
@@ -203,6 +217,15 @@ impl World {
             for &(nx, ny) in &neighbors {
                 if self.loaded_chunks.contains_key(&(nx, ny)) {
                     self.mark_chunk_dirty(nx, ny);
+                }
+            }
+        }
+
+        // Despawn foliage entities
+        for &(chunk_x, chunk_y) in &chunks_to_remove {
+            if let Some(chunk) = self.loaded_chunks.get_mut(&(chunk_x, chunk_y)) {
+                for entity in chunk.foliage() {
+                    commands.entity(*entity).despawn();
                 }
             }
         }
