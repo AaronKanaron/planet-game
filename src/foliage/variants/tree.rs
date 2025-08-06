@@ -1,4 +1,7 @@
-use crate::foliage::{Foliage, assets::FoliageAssets};
+use crate::{
+    foliage::{Foliage, assets::FoliageAssets},
+    utils::debug::plugin::DebugRotate,
+};
 use bevy::{prelude::*, sprite::Anchor};
 use std::f32::consts::FRAC_PI_2;
 
@@ -9,7 +12,6 @@ pub struct Tree {
 
 impl Tree {
     const MAX_STAGE: u32 = 3;
-    const ANGLE_DEVIATION: f32 = 0.125;
 
     pub fn spawn(
         trigger: Trigger<OnAdd, Self>,
@@ -20,9 +22,8 @@ impl Tree {
         let this = q_self.get(trigger.target()).unwrap();
         let foliage = Foliage::new("tree", 0, Self::MAX_STAGE);
         let initial_texture = foliage.get_image_handle(&foliage_assets);
-        let angle = this.transform.rotation.z - FRAC_PI_2;
-
-        commands.spawn((
+        let angle = this.transform.rotation.to_euler(EulerRot::XYZ).2 - FRAC_PI_2;
+        commands.entity(trigger.target()).insert((
             this.transform.with_rotation(Quat::from_rotation_z(angle)),
             foliage,
             Sprite {
@@ -32,5 +33,12 @@ impl Tree {
                 ..default()
             },
         ));
+    }
+}
+
+pub struct TreePlugin;
+impl Plugin for TreePlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(Tree::spawn);
     }
 }

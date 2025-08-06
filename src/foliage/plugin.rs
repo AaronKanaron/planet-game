@@ -1,4 +1,4 @@
-use crate::foliage::{Foliage, FoliageGrowing, assets::FoliageAssets};
+use crate::foliage::{Foliage, FoliageGrowing, assets::FoliageAssets, variants::tree::TreePlugin};
 use bevy::{prelude::*, time::common_conditions::on_timer};
 use std::time::Duration;
 
@@ -39,6 +39,7 @@ impl FoliagePlugin {
 impl Plugin for FoliagePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<FoliageAssets>()
+            .add_plugins(TreePlugin)
             .add_systems(Startup, Self::setup_foliage_assets)
             .add_systems(
                 Update,
