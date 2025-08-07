@@ -22,7 +22,11 @@ pub struct DebugState {
     pub show_chunk_borders: bool,
     pub show_shared_vertices: bool,
     pub show_chunk_normals: bool,
+    pub show_cursor_square: bool,
 }
+
+#[derive(Component)]
+pub struct DebugCursorSquare;
 
 #[derive(Component)]
 pub struct DebugText;
@@ -31,16 +35,18 @@ pub struct DebugPlugin;
 /* Implementations */
 impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, Self::setup).add_systems(
-            Update,
-            (
-                Self::update_info,
-                Self::input_system,
-                Self::render_contour_gizmos_system,
-                // Self::render_voxels_system,
-                // Self::cleanup_unloaded_chunks,
-            ),
-        );
+        app.add_systems(Startup, (Self::setup, Self::setup_cursor_square))
+            .add_systems(
+                Update,
+                (
+                    Self::update_info,
+                    Self::input_system,
+                    Self::render_contour_gizmos_system,
+                    Self::update_cursor_square_system,
+                    // Self::render_voxels_system,
+                    // Self::cleanup_unloaded_chunks,
+                ),
+            );
     }
 }
 
@@ -55,6 +61,7 @@ impl Default for DebugState {
             show_chunk_borders: false,
             show_shared_vertices: false,
             show_chunk_normals: false,
+            show_cursor_square: true, // Show cursor square by default
         }
     }
 }
@@ -76,6 +83,10 @@ impl DebugPlugin {
             },
             DebugText,
         ));
+    }
+
+    pub fn setup_cursor_square(mut commands: Commands) {
+        commands.spawn((Transform::default(), DebugCursorSquare));
     }
 
     /// System to setup debug UI
@@ -105,7 +116,7 @@ impl DebugPlugin {
             };
 
             **text = format!(
-                "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nChunk Range: ({}, {}) to ({}, {})\n\nDebug Visualization:\nF1 - Contour Cells: {}\nF2 - Normals: {}\nF3 - Interior Vertices: {}\nF4 - Contour Lines: {}\nF5 - Voxels: {}\nF6 - Chunk Borders: {}\nF7 - Shared Vertices: {}\nF8 - Chunk Normals: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nK/L - Toggle loudspeaker/preview",
+                "\n\nLoaded Chunks: {} / {} expected\nCulling Box: {:.1}, {:.1} ({}x{})\nPadding: {:.1}\nChunk Range: ({}, {}) to ({}, {})\n\nDebug Visualization:\nF1 - Contour Cells: {}\nF2 - Normals: {}\nF3 - Interior Vertices: {}\nF4 - Contour Lines: {}\nF5 - Voxels: {}\nF6 - Chunk Borders: {}\nF7 - Shared Vertices: {}\nF8 - Chunk Normals: {}\nF9 - Cursor Square: {}\n\nControls:\nWASD - Move box\nArrows - Resize box\nB/N - Increase/Decrease padding\nSpace - Toggle culling\nK/L - Toggle loudspeaker/preview",
                 chunk_world.loaded_chunk_count(),
                 expected_chunks,
                 culling_box.center.x,
@@ -149,6 +160,11 @@ impl DebugPlugin {
                     "OFF"
                 },
                 if debug_state.show_chunk_normals {
+                    "ON"
+                } else {
+                    "OFF"
+                },
+                if debug_state.show_cursor_square {
                     "ON"
                 } else {
                     "OFF"
@@ -219,6 +235,92 @@ impl DebugPlugin {
         if keyboard_input.just_pressed(KeyCode::F8) {
             debug_state.show_chunk_normals = !debug_state.show_chunk_normals;
             info!("Chunk normals: {}", debug_state.show_chunk_normals);
+        }
+
+        if keyboard_input.just_pressed(KeyCode::F9) {
+            debug_state.show_cursor_square = !debug_state.show_cursor_square;
+            info!("Cursor square: {}", debug_state.show_cursor_square);
+        }
+    }
+
+    /// System to update cursor square position based on mouse and surface normal
+    pub fn update_cursor_square_system(
+        world: Res<World>,
+        debug_state: Res<DebugState>,
+        windows: Query<&Window>,
+        camera_query: Query<(&Camera, &GlobalTransform)>,
+        mut cursor_query: Query<&mut Transform, With<DebugCursorSquare>>,
+        mut gizmos: Gizmos,
+    ) {
+        if !debug_state.show_cursor_square {
+            return;
+        }
+
+        let Ok(window) = windows.single() else {
+            return;
+        };
+
+        let Some(cursor_position) = window.cursor_position() else {
+            return;
+        };
+
+        let Ok((camera, camera_transform)) = camera_query.single() else {
+            return;
+        };
+
+        let Ok(mut transform) = cursor_query.single_mut() else {
+            return;
+        };
+
+        // Convert screen position to world position
+        let Ok(world_position) = camera.viewport_to_world_2d(camera_transform, cursor_position)
+        else {
+            return;
+        };
+
+        // Get the closest surface normal
+        let (pos, normal) = world.get_closest_surface_normal(world_position);
+
+        // Update transform position
+        transform.translation = world_position.extend(0.1); // Slightly above ground
+
+        // Rotate to align with surface normal if we found one
+        let angle = normal.to_angle();
+        transform.rotation = Quat::from_rotation_z(angle);
+
+        // Draw the red square using gizmos
+        let square_size = 10.0; // Size of the square
+        let half_size = square_size * 0.5;
+
+        // Calculate square corners relative to the transform
+        let local_corners = [
+            Vec2::new(-half_size, -half_size),
+            Vec2::new(half_size, -half_size),
+            Vec2::new(half_size, half_size),
+            Vec2::new(-half_size, half_size),
+        ];
+
+        // Transform corners to world space
+        let world_corners: Vec<Vec2> = local_corners
+            .iter()
+            .map(|&corner| {
+                let rotated = transform.rotation * corner.extend(0.0);
+                world_position + rotated.truncate()
+            })
+            .collect();
+
+        // Draw the square
+        for i in 0..4 {
+            let start = world_corners[i];
+            let end = world_corners[(i + 1) % 4];
+            gizmos.line_2d(start, end, Color::srgb(1.0, 0.0, 0.0)); // Red color
+        }
+
+        // Draw a small line showing the normal direction if we have one
+        if normal != Vec2::ZERO {
+            let normal_length = square_size * 0.8;
+            let normal_end = world_position + normal * normal_length;
+            gizmos.line_2d(pos, normal_end, Color::srgb(1.0, 0.5, 0.0)); // Orange normal line
         }
     }
 
