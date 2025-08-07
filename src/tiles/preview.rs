@@ -51,15 +51,9 @@ impl TilePreview {
         for mut follower in follower_query.iter_mut() {
             let cursor_pos = follower.raw_cursor_position;
 
-            if let Some((closest_normal, closest_position)) =
-                world.find_closest_normal(cursor_pos, f32::INFINITY)
-            {
-                follower.current_normal = closest_normal;
-                follower.target_position = closest_position;
-            } else {
-                // If no normal found, just use the raw cursor position
-                follower.target_position = cursor_pos;
-            }
+            let (closest_normal, closest_position) = world.get_closest_surface_normal(cursor_pos);
+            follower.current_normal = closest_normal;
+            follower.target_position = closest_position;
         }
     }
 

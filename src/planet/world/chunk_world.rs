@@ -237,85 +237,48 @@ impl World {
         chunks_to_remove
     }
 
-    /// Get all currently loaded chunk positions
-    // pub fn get_loaded_chunk_positions(&self) -> Vec<(i32, i32)> {
-    //     self.loaded_chunks.keys().copied().collect()
-    // }
-
     /// Get the number of loaded chunks
     pub fn loaded_chunk_count(&self) -> usize {
         self.loaded_chunks.len()
     }
 
-    /// Finds the closest normal to `position`, useful for snapping items
-    /// to planet surface.
-    pub fn find_closest_normal(
-        &mut self,
-        position: Vec2,
-        max_distance: f32,
-    ) -> Option<(Vec2, Vec2)> {
-        let mut closest_distance = f32::INFINITY;
-        let mut closest_normal = None;
-        let mut closest_position = None;
-
-        // Calculate which chunks to check based on cursor position and max distance
+    /// Convert a world position to chunk coordinates
+    pub fn world_pos_to_chunk_coords(position: Vec2) -> (i32, i32) {
         let chunk_size_world = CHUNK_SIZE as f32 * VOXEL_SIZE;
-        let (min_chunk_x, max_chunk_x, min_chunk_y, max_chunk_y) = if max_distance.is_infinite() {
-            // If infinite distance, check all loaded chunks
-            let mut min_x = i32::MAX;
-            let mut max_x = i32::MIN;
-            let mut min_y = i32::MAX;
-            let mut max_y = i32::MIN;
+        let chunk_x = (position.x / chunk_size_world).floor() as i32;
+        let chunk_y = (position.y / chunk_size_world).floor() as i32;
+        (chunk_x, chunk_y)
+    }
 
-            for &(chunk_x, chunk_y) in self.loaded_chunks.keys() {
-                min_x = min_x.min(chunk_x);
-                max_x = max_x.max(chunk_x);
-                min_y = min_y.min(chunk_y);
-                max_y = max_y.max(chunk_y);
-            }
+    /// Get the closest surface normal to a given position.
+    /// Returns Vec2::ZERO if no surface normal is found.
+    /// Only checks chunks that are close to the input position.
+    pub fn get_closest_surface_normal(&self, position: Vec2) -> (Vec2, Vec2) {
+        let mut closest_distance = f32::INFINITY;
+        let mut closest_normal = Vec2::ZERO;
+        let mut closest_normal_position = Vec2::ZERO;
 
-            if min_x == i32::MAX {
-                // No loaded chunks
-                return None;
-            }
+        let (center_chunk_x, center_chunk_y) = Self::world_pos_to_chunk_coords(position);
 
-            (min_x, max_x, min_y, max_y)
-        } else {
-            (
-                ((position.x - max_distance) / chunk_size_world).floor() as i32,
-                ((position.x + max_distance) / chunk_size_world).ceil() as i32,
-                ((position.y - max_distance) / chunk_size_world).floor() as i32,
-                ((position.y + max_distance) / chunk_size_world).ceil() as i32,
-            )
-        };
+        // Check the chunk containing the position and its 8 neighbors
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                let chunk_x = center_chunk_x + dx;
+                let chunk_y = center_chunk_y + dy;
 
-        // Check all nearby chunks for preview points
-        for chunk_x in min_chunk_x..=max_chunk_x {
-            for chunk_y in min_chunk_y..=max_chunk_y {
-                if self.loaded_chunks.contains_key(&(chunk_x, chunk_y)) {
-                    let Some(chunk) = self.loaded_chunks.get(&(chunk_x, chunk_y)) else {
-                        continue;
-                    };
-
-                    for (world_pos, normal) in chunk.surface_normals().to_owned() {
+                if let Some(chunk) = self.loaded_chunks.get(&(chunk_x, chunk_y)) {
+                    for &(world_pos, normal) in chunk.surface_normals() {
                         let distance = position.distance(world_pos);
-
-                        if distance < closest_distance
-                            && (max_distance.is_infinite() || distance <= max_distance)
-                        {
+                        if distance < closest_distance {
                             closest_distance = distance;
-                            closest_normal = Some(normal);
-                            closest_position = Some(world_pos);
+                            closest_normal = normal;
+                            closest_normal_position = world_pos;
                         }
                     }
                 }
             }
         }
 
-        if let (Some(normal), Some(position)) = (closest_normal, closest_position) {
-            Some((normal, position))
-        } else {
-            None
-        }
+        (closest_normal_position, closest_normal)
     }
 }
